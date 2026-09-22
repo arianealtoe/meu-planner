@@ -1262,7 +1262,7 @@ function openBookModal(book){
       <div style="flex:1;">
         <div class="field"><label>Título</label><input id="mTitle" value="${esc(b.title)}" placeholder="Ex: O Cérebro e a Mente"></div>
         <div class="field" style="margin-top:8px;"><label>Autor</label><input id="mAuthor" value="${esc(b.author)}" placeholder="Ex: Dalgalarrondo"></div>
-        <div class="fetch-status" id="mFetchStatus">${hasPdf? 'PDF vinculado ✓' : 'Digite título e autor para buscar a capa, ou importe um PDF abaixo.'}</div>
+        <div class="fetch-status" id="mFetchStatus">${hasPdf? 'PDF vinculado ✓' : 'Digite título e autor para buscar capa e total de páginas na Google Books, ou importe um PDF abaixo.'}</div>
       </div>
     </div>
     <div class="pdf-import-row">
@@ -1311,26 +1311,42 @@ function openBookModal(book){
 
   async function tryFetchCoverFromGoogleBooks(){
     const title=$('#mTitle').value.trim(), author=$('#mAuthor').value.trim();
-    if(!title || coverAssetId) return;
+    if(!title) return;
     const myToken=++coverFetchToken;
-    $('#mFetchStatus').textContent='Buscando capa…';
+    $('#mFetchStatus').textContent='Buscando na Google Books…';
     try{
       const q=encodeURIComponent(`intitle:${title}${author?` inauthor:${author}`:''}`);
       const res=await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=1`);
       const json=await res.json();
       if(myToken!==coverFetchToken) return;
       const item=json.items && json.items[0];
-      const thumb=item && item.volumeInfo && item.volumeInfo.imageLinks && (item.volumeInfo.imageLinks.thumbnail || item.volumeInfo.imageLinks.smallThumbnail);
-      if(thumb){
+      const info=item && item.volumeInfo;
+      const thumb=info && info.imageLinks && (info.imageLinks.thumbnail || info.imageLinks.smallThumbnail);
+      let gotCover=false, gotPages=false;
+      if(thumb && !coverAssetId){
         coverUrl=thumb.replace('http://','https://').replace('&edge=curl','');
         $('#mCoverPreview').innerHTML=`<img src="${esc(coverUrl)}">`;
-        $('#mFetchStatus').textContent='Capa encontrada automaticamente ✓';
+        gotCover=true;
+      }
+      // Preenche o total de páginas automaticamente só quando não há PDF
+      // vinculado (a paginação do PDF costuma diferir da edição física) e
+      // o campo ainda está vazio — nunca sobrescreve o que você já digitou.
+      if(!hasPdf && info && info.pageCount && !$('#mPages').value.trim()){
+        $('#mPages').value=info.pageCount;
+        updateBadge();
+        gotPages=true;
+      }
+      if(gotCover || gotPages){
+        $('#mFetchStatus').textContent = 'Encontrado na Google Books: '
+          + [gotCover?'capa':null, gotPages?`${info.pageCount} páginas (edição encontrada)`:null].filter(Boolean).join(' e ') + ' ✓';
+      } else if(!thumb && !(info&&info.pageCount)){
+        $('#mFetchStatus').textContent='Nada encontrado na Google Books — preencha manualmente ou importe o PDF.';
       } else {
-        $('#mFetchStatus').textContent='Nenhuma capa encontrada — envie uma manualmente ou importe o PDF.';
+        $('#mFetchStatus').textContent='Capa e páginas já preenchidas.';
       }
     }catch(err){
       if(myToken!==coverFetchToken) return;
-      $('#mFetchStatus').textContent='Não foi possível buscar a capa agora.';
+      $('#mFetchStatus').textContent='Não foi possível buscar na Google Books agora.';
     }
   }
   let debounceT;
@@ -1338,6 +1354,11 @@ function openBookModal(book){
     $(sel).addEventListener('input', ()=>{ if(pdfAssetId||driveFileId) return; clearTimeout(debounceT); debounceT=setTimeout(tryFetchCoverFromGoogleBooks, 700); });
   });
   if(!book && b.title && !hasPdf) tryFetchCoverFromGoogleBooks();
+  // Se o formato mudar para "Físico" (ou "Quero em físico") e o total de
+  // páginas ainda estiver vazio, busca a contagem da edição física agora.
+  $('#mFormat').addEventListener('change', ()=>{
+    if($('#mFormat').value!=='online' && !hasPdf && !$('#mPages').value.trim()) tryFetchCoverFromGoogleBooks();
+  });
 
   $('#mCoverPreview').addEventListener('click', ()=>$('#mCoverFile').click());
   $('#mCoverFile').addEventListener('change', async e=>{
