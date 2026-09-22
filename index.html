@@ -572,6 +572,18 @@
 <script src="https://apis.google.com/js/api.js"></script>
 <script src="https://accounts.google.com/gsi/client"></script>
 <script>
+window.addEventListener('error', function(ev){
+  try{
+    var bar=document.getElementById('__errBar');
+    if(!bar){
+      bar=document.createElement('div');
+      bar.id='__errBar';
+      bar.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:99999;background:#7A1F33;color:#fff;font:12px/1.4 monospace;padding:10px 14px;white-space:pre-wrap;max-height:35vh;overflow:auto;';
+      document.body.appendChild(bar);
+    }
+    bar.textContent='Erro no app: '+(ev.message||'')+' ('+(ev.filename||'')+':'+(ev.lineno||'')+') — tire um print disso e me envie.';
+  }catch(e){}
+});
 (function(){
 "use strict";
 
@@ -609,11 +621,23 @@ function openDB(){
   return new Promise((resolve,reject)=>{
     const req=indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded=e=>{ const idb=e.target.result; STORES.forEach(name=>{ if(!idb.objectStoreNames.contains(name)) idb.createObjectStore(name,{keyPath:'id'}); }); };
-    req.onsuccess=()=>resolve(req.result);
+    req.onsuccess=()=>{
+      const idb=req.result;
+      // permite que uma aba mais nova (versão mais recente do app) assuma o
+      // banco sem travar para sempre — sem isso, deixar uma aba antiga aberta
+      // bloqueia indefinidamente a abertura em qualquer aba nova.
+      idb.onversionchange=()=>{ try{ idb.close(); }catch(e){} };
+      resolve(idb);
+    };
     req.onerror=()=>reject(req.error);
+    req.onblocked=()=>{
+      try{ document.title='⚠️ Feche as outras abas — '+document.title; }catch(e){}
+      setTimeout(()=>{ try{ toast('Feche todas as outras abas deste app e recarregue esta página'); }catch(e){} }, 300);
+    };
   });
 }
 let _dbp=openDB();
+_dbp.catch(err=>{ try{ toast('Não foi possível abrir o banco de dados local. Feche outras abas deste app e recarregue.'); }catch(e){} console.error('IndexedDB open failed', err); });
 async function idbGetAll(store){ const idb=await _dbp; return new Promise((res,rej)=>{ const tx=idb.transaction(store,'readonly'); const r=tx.objectStore(store).getAll(); r.onsuccess=()=>res(r.result||[]); r.onerror=()=>rej(r.error); }); }
 async function idbGet(store,id){ const idb=await _dbp; return new Promise((res,rej)=>{ const tx=idb.transaction(store,'readonly'); const r=tx.objectStore(store).get(id); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
 async function idbPut(store,obj){ const idb=await _dbp; return new Promise((res,rej)=>{ const tx=idb.transaction(store,'readwrite'); tx.objectStore(store).put(obj); tx.oncomplete=()=>res(obj); tx.onerror=()=>rej(tx.error); }); }
