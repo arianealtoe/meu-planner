@@ -346,6 +346,10 @@
         <button id="btnGoogleConnect">Conectar ao Google</button>
         <div class="local-note" id="googleNote">Drive (importar PDFs) e Agenda (prévia semanal)</div>
       </div>
+      <div class="google-row">
+        <button id="btnAiConfig">🤖 Configurar IA</button>
+        <div class="local-note">Chave da API Claude — usada para gerar resumos de artigos</div>
+      </div>
       <div class="local-note">Dados salvos neste navegador. Use "Exportar" para backup ou outro aparelho.</div>
       <div class="backup-row">
         <button id="btnExport">Exportar</button>
@@ -986,6 +990,97 @@ $('#btnHlList').addEventListener('click', openHighlightsList);
   layer.addEventListener('touchend', handler);
 })();
 
+/* ================= IA (resumo de artigos via API da Anthropic) ================= */
+// Chamado diretamente do navegador com a própria chave da usuária (sem
+// backend). Isso expõe a chave a quem inspecionar a página — por isso
+// pedimos pra ela usar uma chave com limite de gastos baixo.
+function getAiConfig(){
+  const c=cache.config||{};
+  return { apiKey:c.anthropicApiKey||'', model:c.anthropicModel||'claude-sonnet-4-5-20250929' };
+}
+$('#btnAiConfig').addEventListener('click', ()=>{
+  const cfg=getAiConfig();
+  openModal(`
+    <h2>Configurar IA (Claude)</h2>
+    <p style="font-size:12.5px;color:var(--ink-muted);line-height:1.6;margin-bottom:10px;">
+      Pra gerar resumos de artigos, o app chama a API da Anthropic direto do seu navegador, usando
+      sua própria chave (crie uma em <b>console.anthropic.com</b> → API Keys).
+      <br><br>
+      <b>Atenção:</b> como este site fica hospedado publicamente (mesmo que só você tenha o link),
+      qualquer pessoa que abrir o "Inspecionar" do navegador enquanto o app estiver aberto consegue ver
+      essa chave. Recomendo criar uma chave específica pra isso com um limite de gastos baixo configurado
+      no painel da Anthropic.
+    </p>
+    <div class="field"><label>Chave da API (começa com sk-ant-...)</label><input id="mAiKey" value="${esc(cfg.apiKey)}" placeholder="sk-ant-..."></div>
+    <div class="field" style="margin-top:10px;"><label>Modelo (avançado — deixe como está se não souber)</label><input id="mAiModel" value="${esc(cfg.model)}"></div>
+    <div class="modal-foot">
+      <button class="btn" id="mAiCancel">Cancelar</button>
+      <button class="btn btn-primary" id="mAiSave">Salvar</button>
+    </div>
+  `);
+  $('#mAiCancel').addEventListener('click', closeModal);
+  $('#mAiSave').addEventListener('click', async ()=>{
+    cache.config={...cache.config, id:'main',
+      anthropicApiKey:$('#mAiKey').value.trim(),
+      anthropicModel:$('#mAiModel').value.trim()||'claude-sonnet-4-5-20250929'};
+    await idbPut('config', cache.config);
+    closeModal(); toast('Configuração de IA salva');
+  });
+});
+async function callClaude(userPrompt, maxTokens){
+  const cfg=getAiConfig();
+  if(!cfg.apiKey) throw new Error('Configure sua chave da API em "🤖 Configurar IA", no menu lateral.');
+  const res=await fetch('https://api.anthropic.com/v1/messages', {
+    method:'POST',
+    headers:{
+      'content-type':'application/json',
+      'x-api-key':cfg.apiKey,
+      'anthropic-version':'2023-06-01',
+      'anthropic-dangerous-direct-browser-access':'true',
+    },
+    body: JSON.stringify({ model:cfg.model, max_tokens:maxTokens||1200, messages:[{role:'user', content:userPrompt}] }),
+  });
+  const json=await res.json().catch(()=>null);
+  if(!res.ok){ throw new Error((json && json.error && json.error.message) || `Erro ${res.status} na API da Anthropic`); }
+  const text=((json&&json.content)||[]).map(b=>b.text||'').join('\n').trim();
+  if(!text) throw new Error('A IA não retornou texto.');
+  return text;
+}
+async function extractPdfFullText(pdfDoc, maxChars){
+  maxChars=maxChars||24000;
+  let out='';
+  for(let n=1; n<=pdfDoc.numPages; n++){
+    const page=await pdfDoc.getPage(n);
+    const tc=await page.getTextContent();
+    out += `\n\n--- página ${n} ---\n` + tc.items.map(it=>it.str).join(' ');
+    if(out.length>maxChars){ out=out.slice(0,maxChars)+'\n[...texto truncado por tamanho...]'; break; }
+  }
+  return out.trim();
+}
+async function generateArticleAiSummary(entry, storeName){
+  const bytes=await getEntryPdfBytes(entry, storeName);
+  const pdfDoc=await pdfjsLib.getDocument({data:bytes}).promise;
+  const text=await extractPdfFullText(pdfDoc, 24000);
+  if(!text || text.replace(/---.*?---/g,'').trim().length<40){
+    throw new Error('Não consegui extrair texto deste PDF (provavelmente é um scan sem OCR).');
+  }
+  const prompt=`Você é um assistente de um médico residente de psiquiatria. Leia o texto extraído do artigo científico abaixo (pode vir incompleto ou truncado) e escreva, em português, um resumo estruturado com estes tópicos, usando marcadores curtos:
+1) Objetivo do estudo
+2) Principais métodos (bem resumido)
+3) Principais achados/resultados
+4) Pontos fortes
+5) Principais limitações e críticas metodológicas
+6) Relevância prática para a psiquiatria clínica
+
+Seja objetivo e conciso. Baseie-se apenas no que está no texto — não invente dados que não aparecem nele. Se o texto estiver claramente incompleto/truncado, avise no final.
+
+TEXTO EXTRAÍDO DO PDF:
+"""
+${text}
+"""`;
+  return await callClaude(prompt, 1400);
+}
+
 /* ================= PDF reader ================= */
 let readerState=null;
 function openReaderScrim(){ $('#readerScrim').hidden=false; }
@@ -1249,6 +1344,50 @@ $all('.book-tab', $('#bookFormatTabs')).forEach(btn=>{
 $('#btnAddBook').addEventListener('click', ()=>openBookModal(null));
 
 let coverFetchToken=0;
+// Duas fontes públicas de metadados de livro, tentadas em cadeia: a Google
+// Books tem pouca cobertura de livros de editoras médicas/brasileiras
+// menores, então quando ela não acha nada tentamos a Open Library (base
+// bem mais ampla, incluindo muitas edições brasileiras/traduzidas).
+async function fetchBookMetaFromGoogleBooks(title, author){
+  const q=encodeURIComponent(`intitle:${title}${author?` inauthor:${author}`:''}`);
+  const res=await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=1`);
+  const json=await res.json();
+  const info=json.items && json.items[0] && json.items[0].volumeInfo;
+  const thumb=info && info.imageLinks && (info.imageLinks.thumbnail || info.imageLinks.smallThumbnail);
+  return {
+    cover: thumb ? thumb.replace('http://','https://').replace('&edge=curl','') : null,
+    pages: (info && info.pageCount) || null,
+    source: 'Google Books',
+  };
+}
+async function fetchBookMetaFromOpenLibrary(title, author){
+  const q=encodeURIComponent(`${title} ${author||''}`.trim());
+  const res=await fetch(`https://openlibrary.org/search.json?q=${q}&fields=cover_i,number_of_pages_median&limit=1`);
+  const json=await res.json();
+  const doc=json.docs && json.docs[0];
+  return {
+    cover: (doc && doc.cover_i) ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-L.jpg` : null,
+    pages: (doc && doc.number_of_pages_median) || null,
+    source: 'Open Library',
+  };
+}
+async function fetchBookMeta(title, author){
+  let result={cover:null, pages:null, source:null};
+  try{
+    const g=await fetchBookMetaFromGoogleBooks(title, author);
+    if(g.cover||g.pages) result={...g};
+  }catch(e){}
+  if(!result.cover || !result.pages){
+    try{
+      const o=await fetchBookMetaFromOpenLibrary(title, author);
+      if(!result.cover && o.cover) result.cover=o.cover;
+      if(!result.pages && o.pages) result.pages=o.pages;
+      if((o.cover||o.pages) && !result.source) result.source='Open Library';
+      else if(o.cover||o.pages) result.source=(result.source==='Google Books' && (o.cover||o.pages)) ? 'Google Books + Open Library' : result.source;
+    }catch(e){}
+  }
+  return result;
+}
 function openBookModal(book){
   const b=book||{title:'',author:'',status:'quero_ler',format:'fisico',pages:'',currentPage:'',coverUrl:'',coverAssetId:'',notes:'',pdfAssetId:'',driveFileId:''};
   const hasPdf = !!(b.pdfAssetId || b.driveFileId);
@@ -1313,40 +1452,35 @@ function openBookModal(book){
     const title=$('#mTitle').value.trim(), author=$('#mAuthor').value.trim();
     if(!title) return;
     const myToken=++coverFetchToken;
-    $('#mFetchStatus').textContent='Buscando na Google Books…';
+    $('#mFetchStatus').textContent='Buscando capa e páginas (Google Books + Open Library)…';
     try{
-      const q=encodeURIComponent(`intitle:${title}${author?` inauthor:${author}`:''}`);
-      const res=await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=1`);
-      const json=await res.json();
+      const meta=await fetchBookMeta(title, author);
       if(myToken!==coverFetchToken) return;
-      const item=json.items && json.items[0];
-      const info=item && item.volumeInfo;
-      const thumb=info && info.imageLinks && (info.imageLinks.thumbnail || info.imageLinks.smallThumbnail);
       let gotCover=false, gotPages=false;
-      if(thumb && !coverAssetId){
-        coverUrl=thumb.replace('http://','https://').replace('&edge=curl','');
+      if(meta.cover && !coverAssetId){
+        coverUrl=meta.cover;
         $('#mCoverPreview').innerHTML=`<img src="${esc(coverUrl)}">`;
         gotCover=true;
       }
       // Preenche o total de páginas automaticamente só quando não há PDF
       // vinculado (a paginação do PDF costuma diferir da edição física) e
       // o campo ainda está vazio — nunca sobrescreve o que você já digitou.
-      if(!hasPdf && info && info.pageCount && !$('#mPages').value.trim()){
-        $('#mPages').value=info.pageCount;
+      if(!hasPdf && meta.pages && !$('#mPages').value.trim()){
+        $('#mPages').value=meta.pages;
         updateBadge();
         gotPages=true;
       }
       if(gotCover || gotPages){
-        $('#mFetchStatus').textContent = 'Encontrado na Google Books: '
-          + [gotCover?'capa':null, gotPages?`${info.pageCount} páginas (edição encontrada)`:null].filter(Boolean).join(' e ') + ' ✓';
-      } else if(!thumb && !(info&&info.pageCount)){
-        $('#mFetchStatus').textContent='Nada encontrado na Google Books — preencha manualmente ou importe o PDF.';
+        $('#mFetchStatus').textContent = `Encontrado (${meta.source}): `
+          + [gotCover?'capa':null, gotPages?`${meta.pages} páginas`:null].filter(Boolean).join(' e ') + ' ✓';
+      } else if(!meta.cover && !meta.pages){
+        $('#mFetchStatus').textContent='Não encontramos esse livro em nenhuma base pública — preencha manualmente ou importe o PDF.';
       } else {
         $('#mFetchStatus').textContent='Capa e páginas já preenchidas.';
       }
     }catch(err){
       if(myToken!==coverFetchToken) return;
-      $('#mFetchStatus').textContent='Não foi possível buscar na Google Books agora.';
+      $('#mFetchStatus').textContent='Não foi possível buscar agora.';
     }
   }
   let debounceT;
@@ -1445,7 +1579,7 @@ function renderArticles(){
       <div class="art-thumb">${thumb}</div>
       <div class="art-main" data-open="${a.id}">
         <div class="art-title ${a.status==='lido'?'done':''}">${esc(a.title||'Sem título')}</div>
-        <div class="art-meta">${a.source?`<span>${esc(a.source)}</span>`:''}${a.pages?`<span>${a.currentPage||0}/${a.pages} pág.</span>`:''}${a.attachmentId&&!a.pdfAssetId?`<span>📎 ${esc(a.attachmentName||'anexo')}</span>`:''}</div>
+        <div class="art-meta">${a.source?`<span>${esc(a.source)}</span>`:''}${a.pages?`<span>${a.currentPage||0}/${a.pages} pág.</span>`:''}${a.attachmentId&&!a.pdfAssetId?`<span>📎 ${esc(a.attachmentName||'anexo')}</span>`:''}${a.aiSummary?'<span>🤖 resumo gerado</span>':''}</div>
         ${a.tags&&a.tags.length? `<div class="tag-row">${a.tags.map(t=>`<span class="pill pill-muted">${esc(t)}</span>`).join('')}</div>`:''}
       </div>
     </div>`;
@@ -1463,7 +1597,7 @@ function renderArticles(){
 $('#btnAddArticle').addEventListener('click', ()=>openArticleModal(null));
 
 function openArticleModal(article){
-  const a=article||{title:'',source:'',status:'pendente',tags:[],notes:'',attachmentId:'',attachmentName:'',pdfAssetId:'',driveFileId:'',coverAssetId:'',pages:'',currentPage:''};
+  const a=article||{title:'',source:'',status:'pendente',tags:[],notes:'',attachmentId:'',attachmentName:'',pdfAssetId:'',driveFileId:'',coverAssetId:'',pages:'',currentPage:'',aiSummary:''};
   const hasPdf = !!(a.pdfAssetId || a.driveFileId);
   openModal(`
     <h2>${article?'Editar artigo':'Novo artigo'}</h2>
@@ -1479,6 +1613,14 @@ function openArticleModal(article){
       </div>
       <input type="file" id="mAPdfFile" accept="application/pdf" hidden>
       <div class="fetch-status" id="mAFetchStatus">${hasPdf? 'PDF vinculado ✓' : 'Opcional — importe para ler dentro do app com progresso automático.'}</div>
+    </div>
+    <div class="field" style="margin-top:12px;">
+      <label>Resumo e crítica (gerado por IA)</label>
+      <div class="pdf-import-row" style="margin-top:0;">
+        <button class="btn btn-sm" id="mABtnAiSummary" ${hasPdf?'':'disabled title="Importe um PDF primeiro"'}>🤖 Gerar resumo com IA</button>
+      </div>
+      <div class="fetch-status" id="mAAiStatus">${hasPdf? '' : 'Disponível depois de importar o PDF do artigo.'}</div>
+      <textarea id="mAAiSummary" rows="6" placeholder="O resumo gerado pela IA aparece aqui — você pode editar livremente." style="margin-top:8px;">${esc(a.aiSummary||'')}</textarea>
     </div>
     <div class="field" style="margin-top:12px;"><label>Notas</label><textarea id="mANotes" rows="2">${esc(a.notes||'')}</textarea></div>
     <div class="modal-foot">
@@ -1499,6 +1641,8 @@ function openArticleModal(article){
       attach={id:'', name:''};
       if(!$('#mATitle').value.trim() && result.title) $('#mATitle').value=result.title;
       $('#mAFetchStatus').textContent='PDF importado ✓ — leitura com progresso automático disponível';
+      $('#mABtnAiSummary').disabled=false; $('#mABtnAiSummary').removeAttribute('title');
+      $('#mAAiStatus').textContent='';
     }catch(err){ $('#mAFetchStatus').textContent='Não foi possível processar esse PDF.'; }
   }
   $('#mABtnDrive').addEventListener('click', ()=>{
@@ -1519,6 +1663,21 @@ function openArticleModal(article){
     closeModal();
     openPdfReader('articles', article);
   });
+  $('#mABtnAiSummary').addEventListener('click', async ()=>{
+    if(!pdfAssetId && !driveFileId){ toast('Importe um PDF primeiro'); return; }
+    $('#mABtnAiSummary').disabled=true;
+    $('#mAAiStatus').textContent='Lendo o PDF e gerando o resumo… (pode levar alguns segundos)';
+    try{
+      const tempEntry={id:(article&&article.id)||'temp', pdfAssetId, driveFileId, driveResourceKey, driveFileName};
+      const summary=await generateArticleAiSummary(tempEntry, 'articles');
+      $('#mAAiSummary').value=summary;
+      $('#mAAiStatus').textContent='Resumo gerado ✓ — revise e edite se quiser antes de salvar.';
+    }catch(err){
+      $('#mAAiStatus').textContent='Não foi possível gerar o resumo: '+(err&&err.message?err.message:'erro desconhecido');
+    }finally{
+      $('#mABtnAiSummary').disabled=false;
+    }
+  });
   $('#mACancel').addEventListener('click', closeModal);
   $('#mADelete')?.addEventListener('click', async ()=>{
     await idbDelete('articles', article.id);
@@ -1535,6 +1694,7 @@ function openArticleModal(article){
       notes:$('#mANotes').value.trim(),
       attachmentId:attach.id, attachmentName:attach.name,
       pdfAssetId, driveFileId, driveFileName, driveResourceKey, coverAssetId, pages,
+      aiSummary: $('#mAAiSummary').value.trim(),
       currentPage: a.currentPage||0,
       status:a.status||'pendente',
       createdAt: article? article.createdAt : new Date().toISOString(),
