@@ -638,19 +638,26 @@ async function openDrivePicker(onPicked){
       .addView(view)
       .setOAuthToken(gAccessToken)
       .setDeveloperKey(GOOGLE_API_KEY)
+      .setOrigin(window.location.protocol + '//' + window.location.host)
       .setCallback(data=>{
         if(data.action===google.picker.Action.PICKED){
           const doc=data.docs[0];
-          onPicked({id:doc.id, name:doc.name});
+          onPicked({id:doc.id, name:doc.name, resourceKey:doc.resourceKey||''});
         }
       }).build();
     picker.setVisible(true);
   }catch(err){ /* connectGoogle already toasted */ }
 }
-async function fetchDriveFileBlob(fileId){
+async function fetchDriveFileBlob(fileId, resourceKey){
   await ensureToken();
-  const res=await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {headers:{Authorization:`Bearer ${gAccessToken}`}});
-  if(!res.ok) throw new Error('drive fetch failed');
+  const headers={Authorization:`Bearer ${gAccessToken}`};
+  if(resourceKey) headers['X-Goog-Drive-Resource-Keys']=`${fileId}/${resourceKey}`;
+  const res=await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {headers});
+  if(!res.ok){
+    let detail='';
+    try{ const j=await res.json(); detail=(j&&j.error&&j.error.message)?' — '+j.error.message:''; }catch(e){}
+    throw new Error(`Drive respondeu ${res.status}${detail}`);
+  }
   return await res.blob();
 }
 async function fetchGoogleWeekEvents(){
@@ -697,7 +704,7 @@ async function ingestPdf(blob, fileMeta){
     const coverBlob=await new Promise(res=>canvas.toBlob(res,'image/jpeg',0.85));
     if(coverBlob){ const cr=await assetUpload(coverBlob,{name:'cover.jpg'}); coverAssetId=cr.id; }
   }catch(e){}
-  return { pdfAssetId:saved.id, pages:pdfDoc.numPages, title, author, coverAssetId, driveFileId:fileMeta.driveFileId||'', driveFileName:fileMeta.name||'' };
+  return { pdfAssetId:saved.id, pages:pdfDoc.numPages, title, author, coverAssetId, driveFileId:fileMeta.driveFileId||'', driveFileName:fileMeta.name||'', driveResourceKey:fileMeta.resourceKey||'' };
 }
 async function getEntryPdfBytes(entry, storeName){
   if(entry.pdfAssetId){
@@ -706,7 +713,7 @@ async function getEntryPdfBytes(entry, storeName){
   }
   if(entry.driveFileId){
     toast('Baixando do Google Drive…');
-    const blob=await fetchDriveFileBlob(entry.driveFileId);
+    const blob=await fetchDriveFileBlob(entry.driveFileId, entry.driveResourceKey);
     const saved=await assetUpload(blob, {name:entry.driveFileName||'documento.pdf'});
     entry.pdfAssetId=saved.id;
     await idbPut(storeName, entry);
@@ -1001,7 +1008,7 @@ function openBookModal(book){
     </div>
   `);
   hydrateImages($('#modalBody'));
-  let coverUrl=b.coverUrl||'', coverAssetId=b.coverAssetId||'', pdfAssetId=b.pdfAssetId||'', driveFileId=b.driveFileId||'', driveFileName=b.driveFileName||'', pages=b.pages||'';
+  let coverUrl=b.coverUrl||'', coverAssetId=b.coverAssetId||'', pdfAssetId=b.pdfAssetId||'', driveFileId=b.driveFileId||'', driveFileName=b.driveFileName||'', driveResourceKey=b.driveResourceKey||'', pages=b.pages||'';
   const updateBadge=()=>{
     const p=Number($('#mPages').value)||0, cur=Number($('#mCurPage').value)||0;
     const pct = p>0 ? Math.max(0,Math.min(100,Math.round(cur/p*100))) : 0;
@@ -1056,7 +1063,7 @@ function openBookModal(book){
     try{
       const result=await ingestPdf(blob, meta);
       pdfAssetId=result.pdfAssetId; coverAssetId=result.coverAssetId; coverUrl='';
-      driveFileId=result.driveFileId; driveFileName=result.driveFileName; pages=result.pages;
+      driveFileId=result.driveFileId; driveFileName=result.driveFileName; driveResourceKey=result.driveResourceKey; pages=result.pages;
       if(!$('#mTitle').value.trim() && result.title) $('#mTitle').value=result.title;
       if(!$('#mAuthor').value.trim() && result.author) $('#mAuthor').value=result.author;
       $('#mPages').value=pages;
@@ -1067,8 +1074,10 @@ function openBookModal(book){
   }
   $('#mBtnDrive').addEventListener('click', ()=>{
     openDrivePicker(async picked=>{
-      const blob=await fetchDriveFileBlob(picked.id);
-      await handlePdf(blob, {name:picked.name, driveFileId:picked.id});
+      try{
+        const blob=await fetchDriveFileBlob(picked.id, picked.resourceKey);
+        await handlePdf(blob, {name:picked.name, driveFileId:picked.id, resourceKey:picked.resourceKey});
+      }catch(err){ $('#mFetchStatus').textContent='Não foi possível baixar do Drive: '+err.message; }
     });
   });
   $('#mBtnLocalPdf').addEventListener('click', ()=>$('#mPdfFile').click());
@@ -1098,7 +1107,7 @@ function openBookModal(book){
       status: $('#mStatus').value,
       pages:pagesVal, currentPage: curPage,
       progress: pagesVal>0 ? Math.max(0,Math.min(100,Math.round(curPage/pagesVal*100))) : 0,
-      coverUrl, coverAssetId, pdfAssetId, driveFileId, driveFileName,
+      coverUrl, coverAssetId, pdfAssetId, driveFileId, driveFileName, driveResourceKey,
       notes: $('#mNotes').value.trim(),
       createdAt: book? book.createdAt : new Date().toISOString(),
     };
@@ -1165,14 +1174,14 @@ function openArticleModal(article){
     </div>
   `);
   let attach={id:a.attachmentId||'', name:a.attachmentName||''};
-  let pdfAssetId=a.pdfAssetId||'', driveFileId=a.driveFileId||'', driveFileName=a.driveFileName||'', coverAssetId=a.coverAssetId||'', pages=a.pages||'';
+  let pdfAssetId=a.pdfAssetId||'', driveFileId=a.driveFileId||'', driveFileName=a.driveFileName||'', driveResourceKey=a.driveResourceKey||'', coverAssetId=a.coverAssetId||'', pages=a.pages||'';
 
   async function handlePdf(blob, meta){
     $('#mAFetchStatus').textContent='Processando PDF…';
     try{
       const result=await ingestPdf(blob, meta);
       pdfAssetId=result.pdfAssetId; coverAssetId=result.coverAssetId;
-      driveFileId=result.driveFileId; driveFileName=result.driveFileName; pages=result.pages;
+      driveFileId=result.driveFileId; driveFileName=result.driveFileName; driveResourceKey=result.driveResourceKey; pages=result.pages;
       attach={id:'', name:''};
       if(!$('#mATitle').value.trim() && result.title) $('#mATitle').value=result.title;
       $('#mAFetchStatus').textContent='PDF importado ✓ — leitura com progresso automático disponível';
@@ -1180,8 +1189,10 @@ function openArticleModal(article){
   }
   $('#mABtnDrive').addEventListener('click', ()=>{
     openDrivePicker(async picked=>{
-      const blob=await fetchDriveFileBlob(picked.id);
-      await handlePdf(blob, {name:picked.name, driveFileId:picked.id});
+      try{
+        const blob=await fetchDriveFileBlob(picked.id, picked.resourceKey);
+        await handlePdf(blob, {name:picked.name, driveFileId:picked.id, resourceKey:picked.resourceKey});
+      }catch(err){ $('#mAFetchStatus').textContent='Não foi possível baixar do Drive: '+err.message; }
     });
   });
   $('#mABtnLocalPdf').addEventListener('click', ()=>$('#mAPdfFile').click());
@@ -1209,7 +1220,7 @@ function openArticleModal(article){
       tags:$('#mATags').value.split(',').map(s=>s.trim()).filter(Boolean),
       notes:$('#mANotes').value.trim(),
       attachmentId:attach.id, attachmentName:attach.name,
-      pdfAssetId, driveFileId, driveFileName, coverAssetId, pages,
+      pdfAssetId, driveFileId, driveFileName, driveResourceKey, coverAssetId, pages,
       currentPage: a.currentPage||0,
       status:a.status||'pendente',
       createdAt: article? article.createdAt : new Date().toISOString(),
