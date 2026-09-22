@@ -270,10 +270,32 @@
   .reader-top{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--bg-elev);border-bottom:1px solid var(--border-soft);}
   .reader-title{font-family:var(--font-display);font-weight:600;font-size:14.5px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .reader-body{flex:1;overflow:auto;display:flex;justify-content:center;align-items:flex-start;padding:20px;}
-  .reader-body canvas{background:#fff;box-shadow:var(--shadow);max-width:100%;height:auto;border-radius:4px;}
+  .reader-page-wrap{position:relative;margin:0 auto;line-height:0;}
+  .reader-body canvas{background:#fff;box-shadow:var(--shadow);max-width:100%;height:auto;border-radius:4px;display:block;}
   .reader-bottom{display:flex;align-items:center;justify-content:center;gap:14px;padding:12px;background:var(--bg-elev);border-top:1px solid var(--border-soft);}
   .reader-bottom input{width:56px;text-align:center;}
   .reader-msg{color:var(--bg);font-size:13px;margin:auto;text-align:center;}
+  .reader-hl-tools{display:flex;align-items:center;gap:9px;}
+  .hl-toggle{font-size:12px;padding:6px 10px;border-radius:8px;white-space:nowrap;}
+  .hl-toggle.active{background:var(--wine);color:#fff;}
+  #btnHlList{font-size:12px;padding:6px 10px;border-radius:8px;white-space:nowrap;}
+  .hl-swatch{width:16px;height:16px;border-radius:50%;cursor:pointer;border:2px solid transparent;display:inline-block;flex:none;}
+  .hl-swatch.active{border-color:var(--ink,#222);box-shadow:0 0 0 1px var(--surface);}
+  .textLayer{position:absolute;inset:0;overflow:hidden;line-height:1;text-align:initial;transform-origin:0 0;z-index:2;pointer-events:none;}
+  .textLayer span, .textLayer br{color:transparent;position:absolute;white-space:pre;cursor:text;transform-origin:0% 0%;}
+  .reader-page-wrap.hl-active .textLayer{pointer-events:auto;}
+  .reader-page-wrap.hl-active .textLayer span{cursor:text;}
+  .textLayer ::selection{background:rgba(244,211,94,.55);}
+  .hl-layer{position:absolute;inset:0;pointer-events:none;z-index:1;}
+  .hl-mark{position:absolute;pointer-events:auto;cursor:pointer;opacity:.42;border-radius:2px;mix-blend-mode:multiply;}
+  .hl-list{display:flex;flex-direction:column;gap:8px;max-height:360px;overflow:auto;margin-top:6px;}
+  .hl-item{display:flex;gap:10px;align-items:flex-start;padding:9px 10px;border:1px solid var(--border-soft);border-radius:10px;cursor:pointer;}
+  .hl-item:hover{background:var(--bg-elev);}
+  .hl-dot{width:10px;height:10px;border-radius:50%;flex:none;margin-top:4px;}
+  .hl-item-body{flex:1;min-width:0;}
+  .hl-item-text{font-size:12.5px;line-height:1.4;}
+  .hl-item-meta{font-size:10.5px;color:var(--ink-faint);margin-top:3px;}
+  .hl-item-del{flex:none;}
 
   .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:20px;font-size:12.5px;z-index:80;opacity:0;pointer-events:none;transition:opacity .2s;max-width:88vw;text-align:center;}
   .toast.show{opacity:1;}
@@ -515,12 +537,23 @@
 <div class="reader-scrim" id="readerScrim" hidden>
   <div class="reader-top">
     <div class="reader-title" id="readerTitle">Lendo…</div>
+    <div class="reader-hl-tools" id="readerHlTools">
+      <button class="icon-btn hl-toggle" id="btnHlToggle" title="Grifar texto">🖍️ Grifar</button>
+      <span class="hl-swatch active" data-color="#F4D35E" style="background:#F4D35E"></span>
+      <span class="hl-swatch" data-color="#8FD3C0" style="background:#8FD3C0"></span>
+      <span class="hl-swatch" data-color="#F2B6C6" style="background:#F2B6C6"></span>
+      <button class="icon-btn" id="btnHlList" title="Ver grifos">📝 Grifos</button>
+    </div>
     <button class="icon-btn" id="btnReaderClose">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
     </button>
   </div>
   <div class="reader-body" id="readerBody">
-    <canvas id="readerCanvas" hidden></canvas>
+    <div class="reader-page-wrap" id="readerPageWrap">
+      <canvas id="readerCanvas" hidden></canvas>
+      <div class="hl-layer" id="readerHighlightLayer"></div>
+      <div class="textLayer" id="readerTextLayer"></div>
+    </div>
     <div class="reader-msg" id="readerMsg">Carregando…</div>
   </div>
   <div class="reader-bottom">
@@ -570,8 +603,8 @@ function monthKey(d){ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMo
 function uid(){ return (crypto.randomUUID? crypto.randomUUID() : 'id-'+Date.now()+'-'+Math.random().toString(36).slice(2)); }
 
 /* ================= IndexedDB layer ================= */
-const DB_NAME='plannerConsultorioVida', DB_VERSION=1;
-const STORES=['books','articles','events','patients','finance','config','assets'];
+const DB_NAME='plannerConsultorioVida', DB_VERSION=2;
+const STORES=['books','articles','events','patients','finance','config','assets','highlights'];
 function openDB(){
   return new Promise((resolve,reject)=>{
     const req=indexedDB.open(DB_NAME, DB_VERSION);
@@ -682,7 +715,15 @@ async function openDrivePicker(onPicked){
   try{
     await ensureToken();
     await loadPicker();
-    const view=new google.picker.DocsView(google.picker.ViewId.DOCS).setMimeTypes('application/pdf').setIncludeFolders(true).setSelectFolderEnabled(false).setEnableDrives(true);
+    // Uma visão simples "crua" (sem .setEnableDrives) já traz nativamente a
+    // navegação lateral do Picker com Meu Drive / Compartilhado comigo /
+    // Recentes / Com estrela. .setEnableDrives(true) tem um efeito colateral
+    // conhecido: substitui TODA a navegação por só "Drives compartilhados"
+    // — foi isso que causou a tela mostrando só essa aba antes.
+    const view=new google.picker.DocsView(google.picker.ViewId.DOCS)
+      .setMimeTypes('application/pdf')
+      .setIncludeFolders(true)
+      .setSelectFolderEnabled(false);
     const picker=new google.picker.PickerBuilder()
       .addView(view)
       .setOAuthToken(gAccessToken)
@@ -789,10 +830,135 @@ async function getEntryPdfBytes(entry, storeName){
   throw new Error('Este item não tem um PDF associado.');
 }
 
+/* ================= Grifos (highlights) ================= */
+let highlightMode=false, highlightColor='#F4D35E';
+async function getHighlights(storeName, entryId, page){
+  const all=await idbGetAll('highlights');
+  return all.filter(h=>h.entryType===storeName && h.entryId===entryId && h.page===page);
+}
+async function getAllHighlightsFor(storeName, entryId){
+  const all=await idbGetAll('highlights');
+  return all.filter(h=>h.entryType===storeName && h.entryId===entryId).sort((a,b)=>a.page-b.page);
+}
+async function buildTextLayer(page, viewport, container){
+  container.innerHTML='';
+  container.style.setProperty('--scale-factor', viewport.scale);
+  if(!window.pdfjsLib || typeof pdfjsLib.renderTextLayer!=='function') return false;
+  try{
+    const textContent=await page.getTextContent();
+    const task=pdfjsLib.renderTextLayer({textContentSource:textContent, container, viewport, textDivs:[]});
+    await task.promise;
+    return true;
+  }catch(e){ return false; }
+}
+function renderHighlightLayer(container, highlights, w, h){
+  container.innerHTML='';
+  highlights.forEach(hl=>{
+    (hl.rects||[]).forEach(r=>{
+      const d=document.createElement('div');
+      d.className='hl-mark';
+      d.style.left=(r.x*w)+'px'; d.style.top=(r.y*h)+'px';
+      d.style.width=(r.w*w)+'px'; d.style.height=(r.h*h)+'px';
+      d.style.background=hl.color||'#F4D35E';
+      d.title='Clique para remover o grifo';
+      d.addEventListener('click', async e=>{
+        e.stopPropagation();
+        await idbDelete('highlights', hl.id);
+        if(readerState) renderReaderPage(readerState.pageNum);
+      });
+      container.appendChild(d);
+    });
+  });
+}
+function captureSelectionAsRects(container){
+  const sel=window.getSelection();
+  if(!sel || sel.isCollapsed || sel.rangeCount===0) return null;
+  const range=sel.getRangeAt(0);
+  if(!container.contains(range.commonAncestorContainer)) return null;
+  const contRect=container.getBoundingClientRect();
+  const w=contRect.width, h=contRect.height;
+  if(!w || !h) return null;
+  const clientRects=Array.from(range.getClientRects());
+  const rects=clientRects.map(r=>({
+    x:(r.left-contRect.left)/w, y:(r.top-contRect.top)/h,
+    w:r.width/w, h:r.height/h,
+  })).filter(r=>r.w>0.0008 && r.h>0.0008);
+  const text=sel.toString();
+  sel.removeAllRanges();
+  if(!rects.length) return null;
+  return {rects, text};
+}
+async function openHighlightsList(){
+  if(!readerState) return;
+  const {storeName, entry}=readerState;
+  const list=await getAllHighlightsFor(storeName, entry.id);
+  openModal(`
+    <h2>Grifos — ${esc(entry.title||'')}</h2>
+    ${list.length? `<div class="hl-list">${list.map(h=>`
+      <div class="hl-item" data-page="${h.page}">
+        <span class="hl-dot" style="background:${h.color}"></span>
+        <div class="hl-item-body">
+          <div class="hl-item-text">${esc((h.text||'').trim().slice(0,220))||'(trecho sem texto selecionável)'}</div>
+          <div class="hl-item-meta">página ${h.page}</div>
+        </div>
+        <button class="icon-btn hl-item-del" data-del="${h.id}" title="Remover">✕</button>
+      </div>`).join('')}</div>`
+      : `<div class="empty" style="margin-top:8px;">Nenhum grifo ainda. Ative "🖍️ Grifar" e selecione um trecho do texto.</div>`}
+    <div class="modal-foot"><button class="btn" id="mHlClose">Fechar</button></div>
+  `);
+  $('#mHlClose').addEventListener('click', closeModal);
+  $all('.hl-item', $('#modalBody')).forEach(el=>{
+    el.addEventListener('click', e=>{
+      if(e.target.closest('[data-del]')) return;
+      const page=Number(el.dataset.page);
+      closeModal();
+      gotoPage(page);
+    });
+  });
+  $all('[data-del]', $('#modalBody')).forEach(btn=>{
+    btn.addEventListener('click', async e=>{
+      e.stopPropagation();
+      await idbDelete('highlights', btn.dataset.del);
+      openHighlightsList();
+      if(readerState) renderReaderPage(readerState.pageNum);
+    });
+  });
+}
+$('#btnHlToggle').addEventListener('click', ()=>{
+  highlightMode=!highlightMode;
+  $('#btnHlToggle').classList.toggle('active', highlightMode);
+  $('#readerPageWrap').classList.toggle('hl-active', highlightMode);
+  toast(highlightMode? 'Selecione um trecho do texto para grifar' : 'Modo de grifo desativado');
+});
+$all('.hl-swatch').forEach(s=>{
+  s.addEventListener('click', ()=>{
+    highlightColor=s.dataset.color;
+    $all('.hl-swatch').forEach(x=>x.classList.toggle('active', x===s));
+  });
+});
+$('#btnHlList').addEventListener('click', openHighlightsList);
+(function attachHighlightCapture(){
+  const layer=$('#readerTextLayer');
+  const handler=async ()=>{
+    if(!highlightMode || !readerState) return;
+    const wrap=$('#readerPageWrap');
+    const cap=captureSelectionAsRects(wrap);
+    if(!cap) return;
+    const hl={ id:uid(), entryType:readerState.storeName, entryId:readerState.entry.id, page:readerState.pageNum, rects:cap.rects, color:highlightColor, text:cap.text, createdAt:new Date().toISOString() };
+    await idbPut('highlights', hl);
+    renderReaderPage(readerState.pageNum);
+  };
+  layer.addEventListener('mouseup', handler);
+  layer.addEventListener('touchend', handler);
+})();
+
 /* ================= PDF reader ================= */
 let readerState=null;
 function openReaderScrim(){ $('#readerScrim').hidden=false; }
-function closeReaderScrim(){ $('#readerScrim').hidden=true; $('#readerCanvas').hidden=true; readerState=null; }
+function closeReaderScrim(){
+  $('#readerScrim').hidden=true; $('#readerCanvas').hidden=true; readerState=null;
+  highlightMode=false; $('#btnHlToggle').classList.remove('active'); $('#readerPageWrap').classList.remove('hl-active');
+}
 $('#btnReaderClose').addEventListener('click', closeReaderScrim);
 $('#readerPrev').addEventListener('click', ()=>{ if(readerState) gotoPage(readerState.pageNum-1); });
 $('#readerNext').addEventListener('click', ()=>{ if(readerState) gotoPage(readerState.pageNum+1); });
@@ -835,6 +1001,14 @@ async function renderReaderPage(n){
   if(storeName==='books' && currentView()==='books') renderBooks();
   if(storeName==='articles' && currentView()==='articles') renderArticles();
   renderHome();
+
+  const wrap=$('#readerPageWrap');
+  wrap.style.width=viewport.width+'px'; wrap.style.height=viewport.height+'px';
+  const textLayerOk=await buildTextLayer(page, viewport, $('#readerTextLayer'));
+  $('#readerHlTools').style.opacity = textLayerOk? '1' : '.4';
+  $('#readerHlTools').title = textLayerOk? '' : 'Grifo indisponível para este PDF';
+  const highlights = await getHighlights(storeName, entry.id, n);
+  renderHighlightLayer($('#readerHighlightLayer'), highlights, viewport.width, viewport.height);
 }
 function gotoPage(n){ renderReaderPage(n); }
 
