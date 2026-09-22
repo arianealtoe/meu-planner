@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Consultório & Vida — planner pessoal</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%237A1F33'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#F7F1E3; --bg-elev:#FFFDF8; --surface:#FFFFFF;
+    --ink:#241E17; --ink-muted:#7C7261; --ink-faint:#AB9F89;
+    --wine:#7A1F33; --wine-deep:#591524; --wine-tint:#F2DEE1;
+    --petrol:#155048; --petrol-tint:#DCEBE6;
+    --navy:#1D2A4D; --navy-tint:#E1E5F0;
+    --border:#E7D9BC; --border-soft:#EFE5CE;
+    --good:#2F6F52; --danger:#A23B3B;
+    --shadow:0 10px 30px -12px rgba(36,30,23,.22);
+    --radius:16px; --radius-sm:10px;
+    --font-display:'Fraunces', Georgia, 'Times New Roman', serif;
+    --font-body:'Inter', -apple-system, 'Segoe UI', sans-serif;
+    --font-mono:'IBM Plex Mono', ui-monospace, Menlo, monospace;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#16120D; --bg-elev:#1C1712; --surface:#201A13;
+      --ink:#F1E7D6; --ink-muted:#B5A98F; --ink-faint:#847A63;
+      --wine:#E793A6; --wine-deep:#F2B4C1; --wine-tint:#38222A;
+      --petrol:#74BFAE; --petrol-tint:#1A312C;
+      --navy:#94A6D8; --navy-tint:#20263C;
+      --border:#3A3122; --border-soft:#292215;
+      --good:#5FAE86; --danger:#E08A7E;
+      --shadow:0 10px 30px -12px rgba(0,0,0,.55);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#16120D; --bg-elev:#1C1712; --surface:#201A13;
+    --ink:#F1E7D6; --ink-muted:#B5A98F; --ink-faint:#847A63;
+    --wine:#E793A6; --wine-deep:#F2B4C1; --wine-tint:#38222A;
+    --petrol:#74BFAE; --petrol-tint:#1A312C;
+    --navy:#94A6D8; --navy-tint:#20263C;
+    --border:#3A3122; --border-soft:#292215;
+    --good:#5FAE86; --danger:#E08A7E;
+    --shadow:0 10px 30px -12px rgba(0,0,0,.55);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;}
+  body{background:var(--bg);color:var(--ink);font-family:var(--font-body);}
+  h1,h2,h3{font-family:var(--font-display);font-weight:600;letter-spacing:-.01em;margin:0;text-wrap:balance;}
+  a{color:inherit;}
+  button{font-family:inherit;}
+  img{max-width:100%;}
+  [hidden]{display:none!important;}
+  .num{font-family:var(--font-mono);font-variant-numeric:tabular-nums;}
+  ::selection{background:var(--wine);color:#fff;}
+
+  .app{display:flex;min-height:100dvh;}
+
+  .sidebar{width:224px;flex:none;padding:22px 14px;display:flex;flex-direction:column;gap:26px;position:sticky;top:0;height:100dvh;overflow-y:auto;}
+  .brand{display:flex;flex-direction:column;gap:10px;}
+  .logo-zone{width:100%;aspect-ratio:2.6/1;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer;position:relative;overflow:hidden;padding:10px;}
+  .logo-zone.empty{border:1.5px dashed var(--border);color:var(--ink-faint);}
+  .logo-zone.empty:hover{border-color:var(--wine);color:var(--wine);}
+  .logo-zone.empty .plus{font-size:20px;line-height:1;}
+  .logo-zone.empty .lbl{font-size:11.5px;font-weight:600;}
+  .logo-zone.filled{background:var(--surface);border:1px solid var(--border-soft);}
+  .logo-zone.filled img{max-width:100%;max-height:100%;object-fit:contain;}
+  .logo-zone .swap{position:absolute;inset:auto 0 0 0;background:rgba(0,0,0,.55);color:#fff;font-size:10px;text-align:center;padding:3px 0;opacity:0;transition:opacity .15s;}
+  .logo-zone.filled:hover .swap{opacity:1;}
+  .brand-text{padding:0 2px;}
+  .brand-name{font-family:var(--font-display);font-size:16.5px;font-weight:600;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:text;}
+  .brand-tag{font-size:10.5px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.08em;margin-top:2px;}
+
+  nav.tabs{display:flex;flex-direction:column;gap:3px;}
+  .tab-btn{display:flex;align-items:center;gap:11px;padding:8px 9px;border-radius:11px;border:none;background:none;color:var(--ink-muted);font-size:13.5px;font-weight:500;cursor:pointer;text-align:left;width:100%;}
+  .tab-ic{width:29px;height:29px;border-radius:9px;flex:none;display:flex;align-items:center;justify-content:center;color:var(--ink-faint);transition:background .12s,color .12s;}
+  .tab-ic svg{width:16px;height:16px;}
+  .tab-btn:hover .tab-ic{background:var(--border-soft);color:var(--ink);}
+  .tab-btn.active{color:var(--ink);font-weight:600;}
+  .tab-btn.active .tab-ic{color:#fff;}
+  .tab-btn[data-view="home"].active .tab-ic{background:var(--navy);}
+  .tab-btn[data-view="books"].active .tab-ic{background:var(--wine);}
+  .tab-btn[data-view="articles"].active .tab-ic{background:var(--petrol);}
+  .tab-btn[data-view="agenda"].active .tab-ic{background:var(--navy);}
+  .tab-btn[data-view="patients"].active .tab-ic{background:var(--wine);}
+  .tab-btn[data-view="finance"].active .tab-ic{background:var(--petrol);}
+
+  .sidebar-foot{margin-top:auto;display:flex;flex-direction:column;gap:10px;}
+  .theme-row{display:flex;gap:3px;background:var(--border-soft);border-radius:20px;padding:3px;}
+  .theme-btn{flex:1;border:none;background:none;padding:5px 0;border-radius:16px;font-size:10.5px;color:var(--ink-muted);cursor:pointer;}
+  .theme-btn.active{background:var(--surface);color:var(--ink);}
+  .backup-row{display:flex;gap:6px;}
+  .backup-row button{flex:1;font-size:10.5px;padding:6px 4px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--ink-muted);cursor:pointer;}
+  .backup-row button:hover{border-color:var(--ink-faint);color:var(--ink);}
+  .local-note{font-size:10px;color:var(--ink-faint);line-height:1.4;padding:0 2px;}
+
+  .mobile-bar{display:none;}
+  @media (max-width:860px){
+    .app{flex-direction:column;}
+    .sidebar{position:fixed;inset:0 auto 0 0;transform:translateX(-100%);transition:transform .22s ease;z-index:40;width:78vw;max-width:270px;background:var(--bg-elev);box-shadow:var(--shadow);}
+    .sidebar.open{transform:translateX(0);}
+    .scrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:35;}
+    .scrim.open{display:block;}
+    .mobile-bar{display:flex;align-items:center;gap:10px;padding:14px 16px;background:var(--bg);border-bottom:1px solid var(--border-soft);position:sticky;top:0;z-index:20;}
+    .mobile-bar button{background:none;border:none;color:var(--ink);padding:4px;cursor:pointer;}
+    .mobile-title{font-family:var(--font-display);font-weight:600;font-size:15.5px;}
+  }
+
+  main{flex:1;min-width:0;padding:26px 40px 60px;}
+  @media (max-width:860px){main{padding:18px 18px 48px;}}
+  .view{display:none;max-width:1040px;}
+  .view.active{display:block;}
+  .view-head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:26px;flex-wrap:wrap;}
+  .view-head h1{font-size:27px;}
+  .view-sub{color:var(--ink-muted);font-size:13px;margin-top:4px;}
+
+  .btn{display:inline-flex;align-items:center;gap:6px;border-radius:10px;border:1px solid var(--border);background:none;color:var(--ink);font-size:13px;font-weight:500;padding:8px 14px;cursor:pointer;}
+  .btn:hover{border-color:var(--ink-faint);background:var(--border-soft);}
+  .btn-primary{background:var(--wine);border-color:var(--wine);color:#fff;}
+  .btn-primary:hover{background:var(--wine-deep);border-color:var(--wine-deep);}
+  .btn-sm{padding:5px 10px;font-size:12px;border-radius:8px;}
+  .btn-danger-ghost{color:var(--danger);border-color:transparent;}
+  .icon-btn{border:none;background:none;color:var(--ink-faint);cursor:pointer;padding:5px;border-radius:8px;display:flex;}
+  .icon-btn:hover{background:var(--border-soft);color:var(--ink);}
+
+  .card{background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--radius);}
+  .pad{padding:18px 20px;}
+
+  input,textarea,select{font-family:inherit;font-size:13.5px;color:var(--ink);background:var(--bg-elev);border:1px solid var(--border);border-radius:9px;padding:8px 10px;width:100%;}
+  input:focus,textarea:focus,select:focus{outline:2px solid var(--petrol);outline-offset:1px;}
+  label{font-size:11px;color:var(--ink-muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px;}
+  .field{display:flex;flex-direction:column;}
+  .row{display:flex;gap:10px;flex-wrap:wrap;}
+  .row > .field{flex:1;min-width:130px;}
+
+  .pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;}
+  .pill-wine{background:var(--wine-tint);color:var(--wine);}
+  .pill-petrol{background:var(--petrol-tint);color:var(--petrol);}
+  .pill-navy{background:var(--navy-tint);color:var(--navy);}
+  .pill-muted{background:var(--border-soft);color:var(--ink-muted);}
+
+  .empty{padding:36px 20px;text-align:center;color:var(--ink-faint);font-size:13px;border:1px dashed var(--border);border-radius:var(--radius);}
+
+  .stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:30px;}
+  @media (max-width:760px){.stat-grid{grid-template-columns:repeat(2,1fr);}}
+  .stat{padding:16px 17px 15px;border-top:3px solid var(--border);}
+  .stat.c-navy{border-top-color:var(--navy);}
+  .stat.c-wine{border-top-color:var(--wine);}
+  .stat.c-petrol{border-top-color:var(--petrol);}
+  .stat-label{font-size:11px;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600;}
+  .stat-value{font-family:var(--font-display);font-size:27px;margin-top:7px;}
+  .stat-sub{font-size:11.5px;color:var(--ink-faint);margin-top:2px;}
+  .home-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:16px;}
+  @media (max-width:760px){.home-grid{grid-template-columns:1fr;}}
+  .home-card h3{font-size:14.5px;margin-bottom:13px;}
+  .mini-list{display:flex;flex-direction:column;gap:11px;}
+  .mini-row{display:flex;align-items:center;gap:10px;font-size:13px;}
+  .mini-row .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .mini-row .d{color:var(--ink-faint);font-size:11.5px;flex:none;}
+
+  .book-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:18px;}
+  .book-card{overflow:hidden;border:none;cursor:pointer;}
+  .book-cover{aspect-ratio:2/3;background:var(--wine-tint);position:relative;overflow:hidden;border-radius:12px;}
+  .book-cover img{width:100%;height:100%;object-fit:cover;display:block;}
+  .book-cover .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);color:var(--wine);font-size:12.5px;text-align:center;padding:12px;opacity:.75;}
+  .book-body{padding:10px 2px 0;}
+  .book-title{font-family:var(--font-display);font-size:14px;font-weight:600;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  .book-author{font-size:11.5px;color:var(--ink-muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .progress-track{height:5px;border-radius:4px;background:var(--border-soft);margin-top:9px;overflow:hidden;}
+  .progress-fill{height:100%;background:var(--petrol);border-radius:4px;}
+  .book-foot{display:flex;align-items:center;justify-content:space-between;margin-top:6px;}
+  .prog-pct{font-size:10.5px;color:var(--ink-faint);}
+
+  .art-row{display:flex;align-items:flex-start;gap:12px;padding:15px 2px;border-bottom:1px solid var(--border-soft);}
+  .art-row:last-child{border-bottom:none;}
+  .art-check{width:19px;height:19px;border-radius:50%;border:1.5px solid var(--border);flex:none;margin-top:2px;cursor:pointer;display:flex;align-items:center;justify-content:center;background:var(--surface);}
+  .art-check.done{background:var(--good);border-color:var(--good);color:#fff;}
+  .art-main{flex:1;min-width:0;cursor:pointer;}
+  .art-title{font-size:14px;font-weight:600;}
+  .art-title.done{text-decoration:line-through;color:var(--ink-faint);}
+  .art-meta{font-size:11.5px;color:var(--ink-faint);margin-top:2px;display:flex;gap:8px;flex-wrap:wrap;}
+  .tag-row{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;}
+  .art-link{color:var(--petrol);text-decoration:underline;text-underline-offset:2px;}
+
+  .cal-frame-wrap{border-radius:var(--radius);overflow:hidden;border:1px solid var(--border-soft);background:var(--surface);}
+  .cal-frame-wrap iframe{width:100%;height:600px;border:none;display:block;}
+  .cal-setup{padding:18px 20px;}
+  .day-group{margin-top:22px;}
+  .day-group + .day-group{margin-top:20px;}
+  .day-head{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint);margin-bottom:8px;padding-left:2px;}
+  .event-row{display:flex;gap:12px;align-items:center;padding:11px 14px;}
+  .event-row + .event-row{border-top:1px solid var(--border-soft);}
+  .event-dot{width:8px;height:8px;border-radius:50%;background:var(--navy);flex:none;}
+  .event-time{font-family:var(--font-mono);font-size:11.5px;color:var(--ink-faint);width:44px;flex:none;}
+
+  .privacy-note{display:flex;gap:10px;align-items:flex-start;padding:13px 15px;border-radius:var(--radius-sm);background:var(--wine-tint);color:var(--wine);font-size:12.5px;margin-bottom:20px;}
+  .pt-row{display:flex;align-items:center;gap:12px;padding:13px 14px;}
+  .pt-row + .pt-row{border-top:1px solid var(--border-soft);}
+  .pt-code{font-family:var(--font-mono);font-weight:600;font-size:13px;background:var(--wine-tint);color:var(--wine);padding:3px 8px;border-radius:6px;flex:none;}
+  .pt-main{flex:1;min-width:0;cursor:pointer;}
+  .pt-reason{font-size:13.5px;}
+  .pt-meta{font-size:11.5px;color:var(--ink-faint);margin-top:2px;}
+
+  .month-switch{display:flex;align-items:center;gap:6px;}
+  .fin-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px;}
+  @media (max-width:760px){.fin-grid{grid-template-columns:1fr;}}
+  .fin-section h3{font-size:13.5px;display:flex;align-items:center;justify-content:space-between;margin-bottom:11px;}
+  .fin-item{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border-soft);font-size:13px;}
+  .fin-item:last-child{border-bottom:none;}
+  .fin-item .lbl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .fin-item .val{font-family:var(--font-mono);font-variant-numeric:tabular-nums;}
+  .fin-total{display:flex;justify-content:space-between;padding-top:9px;margin-top:5px;border-top:1px solid var(--border);font-weight:700;font-size:13.5px;}
+  .summary-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;}
+  @media (max-width:700px){.summary-strip{grid-template-columns:repeat(2,1fr);}}
+  .invest-box{margin-top:20px;padding:20px 22px;background:var(--petrol);color:var(--petrol-tint);}
+  .invest-box h3{color:#fff;}
+  .invest-box .stat-label{color:var(--petrol-tint);opacity:.8;}
+  .invest-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+  .slider-wrap{flex:1;min-width:180px;display:flex;align-items:center;gap:10px;}
+  input[type=range]{accent-color:#fff;width:100%;}
+  .invest-box .pill{background:rgba(255,255,255,.18);color:#fff;}
+
+  .modal-scrim{position:fixed;inset:0;background:rgba(20,16,11,.45);display:flex;align-items:center;justify-content:center;z-index:60;padding:20px;}
+  .modal-scrim[hidden]{display:none;}
+  .modal{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);max-width:460px;width:100%;max-height:88vh;overflow:auto;padding:22px 22px 20px;}
+  .modal h2{font-size:18px;margin-bottom:16px;}
+  .modal .field + .field{margin-top:12px;}
+  .row .field{margin-top:0;}
+  .modal-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:20px;}
+  .cover-pick{display:flex;gap:12px;align-items:flex-start;}
+  .cover-preview{width:74px;aspect-ratio:2/3;border-radius:8px;background:var(--wine-tint);flex:none;overflow:hidden;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;}
+  .cover-preview img{width:100%;height:100%;object-fit:cover;}
+  .cover-preview .hint{font-size:9.5px;color:var(--wine);text-align:center;padding:4px;}
+  .fetch-status{font-size:11.5px;color:var(--ink-faint);margin-top:5px;}
+  .file-drop{border:1.5px dashed var(--border);border-radius:9px;padding:12px;text-align:center;font-size:12.5px;color:var(--ink-muted);cursor:pointer;}
+  .file-drop:hover{border-color:var(--petrol);color:var(--petrol);}
+  .attach-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;background:var(--petrol-tint);color:var(--petrol);padding:4px 9px;border-radius:20px;margin-top:6px;text-decoration:none;}
+  .pages-progress{display:flex;align-items:center;gap:10px;margin-top:4px;}
+  .pages-progress .badge{font-family:var(--font-mono);font-size:12px;background:var(--petrol-tint);color:var(--petrol);padding:4px 9px;border-radius:8px;white-space:nowrap;}
+
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:20px;font-size:12.5px;z-index:80;opacity:0;pointer-events:none;transition:opacity .2s;max-width:88vw;text-align:center;}
+  .toast.show{opacity:1;}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="scrim" id="scrim"></div>
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="logo-zone empty" id="logoZone" title="Adicionar sua logo">
+        <span class="plus">+</span><span class="lbl">Adicionar logo</span>
+      </div>
+      <div class="brand-text">
+        <div class="brand-name" id="brandName" title="Clique para editar">Meu Consultório</div>
+        <div class="brand-tag">planner pessoal</div>
+      </div>
+    </div>
+    <nav class="tabs" id="tabs">
+      <button class="tab-btn active" data-view="home">
+        <span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v9h12v-9"/></svg></span>
+        Início
+      </button>
+      <button class="tab-btn" data-view="books">
+        <span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5.5C4 4.7 4.7 4 5.5 4H12v16H5.5A1.5 1.5 0 0 1 4 18.5z"/><path d="M20 5.5c0-.8-.7-1.5-1.5-1.5H12v16h6.5c.8 0 1.5-.7 1.5-1.5z"/></svg></span>
+        Livros
+      </button>
+      <button class="tab-btn" data-view="articles">
+        <span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 4h9l3 3v13H6z"/><path d="M15 4v3h3"/><path d="M9 12h6M9 15.5h6M9 8.5h3"/></svg></span>
+        Artigos
+      </button>
+      <button class="tab-btn" data-view="agenda">
+        <span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="5.5" width="16" height="14.5" rx="2"/><path d="M4 9.5h16M8 3.5v3M16 3.5v3"/></svg></span>
+        Agenda
+      </button>
+      <button class="tab-btn" data-view="patients">
+        <span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c1-4 4-6 7-6s6 2 7 6"/></svg></span>
+        Retornos
+      </button>
+      <button class="tab-btn" data-view="finance">
+        <span class="tab-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 18V9M9 18V5M14 18v-7M19 18V11"/></svg></span>
+        Financeiro
+      </button>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="local-note">Dados salvos neste navegador. Use "Exportar" para fazer backup ou levar para outro aparelho.</div>
+      <div class="backup-row">
+        <button id="btnExport">Exportar</button>
+        <button id="btnImport">Importar</button>
+        <input type="file" id="importFile" accept="application/json" hidden>
+      </div>
+      <div class="theme-row">
+        <button class="theme-btn" data-theme="light">Claro</button>
+        <button class="theme-btn" data-theme="dark">Escuro</button>
+        <button class="theme-btn active" data-theme="system">Sistema</button>
+      </div>
+    </div>
+  </aside>
+
+  <div style="flex:1;min-width:0;display:flex;flex-direction:column;">
+    <div class="mobile-bar">
+      <button id="btnMenu" aria-label="Menu">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <div class="mobile-title" id="mobileTitle">Início</div>
+    </div>
+
+    <main>
+      <section class="view active" id="view-home">
+        <div class="view-head">
+          <div><h1>Bom te ver por aqui</h1><div class="view-sub" id="todayLabel"></div></div>
+        </div>
+        <div class="stat-grid">
+          <div class="card stat c-wine"><div class="stat-label">Lendo agora</div><div class="stat-value num" id="statBooks">–</div><div class="stat-sub">livros em andamento</div></div>
+          <div class="card stat c-petrol"><div class="stat-label">Artigos pendentes</div><div class="stat-value num" id="statArticles">–</div><div class="stat-sub">a ler</div></div>
+          <div class="card stat c-wine"><div class="stat-label">Retornos a marcar</div><div class="stat-value num" id="statPatients">–</div><div class="stat-sub">pacientes</div></div>
+          <div class="card stat c-petrol"><div class="stat-label">Saldo do mês</div><div class="stat-value num" id="statBalance">–</div><div class="stat-sub" id="statBalanceSub">financeiro</div></div>
+        </div>
+        <div class="home-grid">
+          <div class="card pad home-card">
+            <h3>Leituras em andamento</h3>
+            <div class="mini-list" id="homeBooks"></div>
+          </div>
+          <div class="card pad home-card">
+            <h3>Próximos retornos</h3>
+            <div class="mini-list" id="homePatients"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="view-books">
+        <div class="view-head">
+          <div><h1>Livros</h1><div class="view-sub">Capa buscada automaticamente · progresso pela página atual</div></div>
+          <button class="btn btn-primary" id="btnAddBook">+ Novo livro</button>
+        </div>
+        <div class="row" style="margin-bottom:18px;">
+          <div class="field" style="max-width:200px;">
+            <label>Filtrar</label>
+            <select id="bookFilter">
+              <option value="all">Todos</option>
+              <option value="lendo">Lendo</option>
+              <option value="quero_ler">Quero ler</option>
+              <option value="lido">Lidos</option>
+            </select>
+          </div>
+        </div>
+        <div class="book-grid" id="bookGrid"></div>
+        <div class="empty" id="bookEmpty" hidden>Nenhum livro por aqui ainda. Adicione o primeiro.</div>
+      </section>
+
+      <section class="view" id="view-articles">
+        <div class="view-head">
+          <div><h1>Artigos</h1><div class="view-sub">Fila de leitura, com espaço para anexar o PDF</div></div>
+          <button class="btn btn-primary" id="btnAddArticle">+ Novo artigo</button>
+        </div>
+        <div class="card" id="articleList"></div>
+        <div class="empty" id="articleEmpty" hidden style="margin-top:14px;">Nenhum artigo pendente. Bom trabalho.</div>
+      </section>
+
+      <section class="view" id="view-agenda">
+        <div class="view-head">
+          <div><h1>Agenda</h1><div class="view-sub">Google Agenda incorporado + compromissos rápidos</div></div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn" id="btnCalSettings">Configurar</button>
+            <button class="btn" id="btnAddEvent">+ Compromisso</button>
+          </div>
+        </div>
+        <div class="cal-frame-wrap" id="calFrameWrap"></div>
+        <div class="card" style="margin-top:22px;" id="quickEventsCard">
+          <div class="pad" style="border-bottom:1px solid var(--border-soft);">
+            <h3 style="font-size:14.5px;">Compromissos rápidos (internos)</h3>
+          </div>
+          <div style="padding:6px 14px 16px;" id="eventsWrap"></div>
+          <div class="empty" id="eventEmpty" hidden style="border:none;margin:0 14px 16px;">Nada anotado aqui ainda.</div>
+        </div>
+      </section>
+
+      <section class="view" id="view-patients">
+        <div class="view-head">
+          <div><h1>Retornos de pacientes</h1><div class="view-sub">Fila de quem você precisa marcar retorno</div></div>
+          <button class="btn btn-primary" id="btnAddPatient">+ Novo retorno</button>
+        </div>
+        <div class="privacy-note">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex:none;margin-top:1px;"><path d="M12 9v4M12 16.5h.01"/><path d="M10.3 3.9 2.7 17.5A1.8 1.8 0 0 0 4.3 20h15.4a1.8 1.8 0 0 0 1.6-2.5L13.7 3.9a1.8 1.8 0 0 0-3.4 0Z"/></svg>
+          <span>Use apenas iniciais ou um código (ex: "M.S. #12") — evite nome completo, CPF ou qualquer dado que identifique o paciente, mesmo em uso pessoal.</span>
+        </div>
+        <div class="card" id="patientList"></div>
+        <div class="empty" id="patientEmpty" hidden style="margin-top:14px;">Nenhum retorno pendente.</div>
+      </section>
+
+      <section class="view" id="view-finance">
+        <div class="view-head">
+          <div><h1>Financeiro do mês</h1><div class="view-sub">Ganhos, gastos fixos, mercado, futilidades e projeção de investimento</div></div>
+          <div class="month-switch">
+            <button class="icon-btn" id="monthPrev">‹</button>
+            <input type="month" id="monthPicker" style="width:150px;">
+            <button class="icon-btn" id="monthNext">›</button>
+          </div>
+        </div>
+        <div class="summary-strip">
+          <div class="card stat"><div class="stat-label">Ganhos</div><div class="stat-value num" id="finIncome" style="font-size:20px;color:var(--good);">–</div></div>
+          <div class="card stat"><div class="stat-label">Gastos fixos</div><div class="stat-value num" id="finFixed" style="font-size:20px;">–</div></div>
+          <div class="card stat"><div class="stat-label">Mercado + futilidades</div><div class="stat-value num" id="finVar" style="font-size:20px;">–</div></div>
+          <div class="card stat"><div class="stat-label">Saldo</div><div class="stat-value num" id="finBalance" style="font-size:20px;">–</div></div>
+        </div>
+        <div class="fin-grid">
+          <div class="card pad fin-section">
+            <h3>Ganhos <button class="btn btn-sm" data-add="income">+ item</button></h3>
+            <div id="incomeItems"></div>
+            <div class="fin-total"><span>Total</span><span class="num" id="incomeTotal">R$ 0</span></div>
+          </div>
+          <div class="card pad fin-section">
+            <h3>Gastos fixos / programados <button class="btn btn-sm" data-add="fixed">+ item</button></h3>
+            <div id="fixedItems"></div>
+            <div class="fin-total"><span>Total</span><span class="num" id="fixedTotal">R$ 0</span></div>
+          </div>
+          <div class="card pad fin-section">
+            <h3>Mercado <button class="btn btn-sm" data-add="groceries">+ item</button></h3>
+            <div id="groceriesItems"></div>
+            <div class="fin-total"><span>Total</span><span class="num" id="groceriesTotal">R$ 0</span></div>
+          </div>
+          <div class="card pad fin-section">
+            <h3>Futilidades <button class="btn btn-sm" data-add="fun">+ item</button></h3>
+            <div id="funItems"></div>
+            <div class="fin-total"><span>Total</span><span class="num" id="funTotal">R$ 0</span></div>
+          </div>
+        </div>
+        <div class="card invest-box">
+          <h3 style="font-size:14.5px;margin-bottom:4px;">Previsão de investimento</h3>
+          <div class="stat-label" style="margin-bottom:14px;">Quanto do saldo deste mês você pretende investir</div>
+          <div class="invest-row">
+            <div class="slider-wrap">
+              <input type="range" id="investSlider" min="0" max="100" value="20">
+              <span class="num" style="color:#fff;width:42px;" id="investPct">20%</span>
+            </div>
+            <div class="pill num" id="investValue">R$ 0</div>
+          </div>
+          <div style="display:flex;gap:24px;margin-top:16px;flex-wrap:wrap;">
+            <div><div class="stat-label">Projeção anual (12×)</div><div class="num" style="font-size:16px;margin-top:3px;color:#fff;" id="investAnnual">R$ 0</div></div>
+            <div><div class="stat-label">Sobra livre (não investida)</div><div class="num" style="font-size:16px;margin-top:3px;color:#fff;" id="investFree">R$ 0</div></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<div class="modal-scrim" id="modalScrim" hidden><div class="modal" id="modalBody"></div></div>
+<div class="toast" id="toast"></div>
+<input type="file" id="hiddenLogoFile" accept="image/*" hidden>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<script>
+(function(){
+"use strict";
+
+/* ================= helpers ================= */
+const $=(s,r)=>(r||document).querySelector(s);
+const $all=(s,r)=>[...(r||document).querySelectorAll(s)];
+const esc=(s)=> (window.DOMPurify? DOMPurify.sanitize(String(s??''),{ALLOWED_TAGS:[]}) : String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])));
+const BRL = new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'});
+const fmtBRL = n => BRL.format(Number(n)||0);
+const monthsPt=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+const weekdaysPt=['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
+function fmtDateShort(iso){ if(!iso) return ''; const d=new Date(iso+'T00:00:00'); if(isNaN(d)) return iso; return d.getDate()+' '+monthsPt[d.getMonth()]; }
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toast._h); toast._h=setTimeout(()=>t.classList.remove('show'),2600); }
+function todayISO(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function monthKey(d){ d=d||new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function uid(){ return (crypto.randomUUID? crypto.randomUUID() : 'id-'+Date.now()+'-'+Math.random().toString(36).slice(2)); }
+
+/* ================= IndexedDB layer ================= */
+const DB_NAME='plannerConsultorioVida', DB_VERSION=1;
+const STORES=['books','articles','events','patients','finance','config','assets'];
+function openDB(){
+  return new Promise((resolve,reject)=>{
+    const req=indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded=e=>{ const idb=e.target.result; STORES.forEach(name=>{ if(!idb.objectStoreNames.contains(name)) idb.createObjectStore(name,{keyPath:'id'}); }); };
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error);
+  });
+}
+let _dbp=openDB();
+async function idbGetAll(store){ const idb=await _dbp; return new Promise((res,rej)=>{ const tx=idb.transaction(store,'readonly'); const r=tx.objectStore(store).getAll(); r.onsuccess=()=>res(r.result||[]); r.onerror=()=>rej(r.error); }); }
+async function idbGet(store,id){ const idb=await _dbp; return new Promise((res,rej)=>{ const tx=idb.transaction(store,'readonly'); const r=tx.objectStore(store).get(id); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+async function idbPut(store,obj){ const idb=await _dbp; return new Promise((res,rej)=>{ const tx=idb.transaction(store,'readwrite'); tx.objectStore(store).put(obj); tx.oncomplete=()=>res(obj); tx.onerror=()=>rej(tx.error); }); }
+async function idbDelete(store,id){ const idb=await _dbp; return new Promise((res,rej)=>{ const tx=idb.transaction(store,'readwrite'); tx.objectStore(store).delete(id); tx.oncomplete=()=>res(); tx.onerror=()=>rej(tx.error); }); }
+
+const assetUrlCache={};
+async function assetUpload(file){
+  const id=uid();
+  await idbPut('assets',{id, blob:file, contentType:file.type||'application/octet-stream', name:file.name||'', createdAt:new Date().toISOString()});
+  const url=URL.createObjectURL(file);
+  assetUrlCache[id]=url;
+  return {id,url};
+}
+async function assetUrl(id){
+  if(!id) return null;
+  if(assetUrlCache[id]) return assetUrlCache[id];
+  const rec=await idbGet('assets',id);
+  if(!rec) return null;
+  const url=URL.createObjectURL(rec.blob);
+  assetUrlCache[id]=url;
+  return url;
+}
+function hydrateImages(root){
+  $all('[data-asset]', root).forEach(async el=>{
+    const id=el.dataset.asset;
+    const url=await assetUrl(id);
+    if(url) el.src=url;
+  });
+}
+
+/* ================= theme ================= */
+function applyTheme(mode){
+  const root=document.documentElement;
+  if(mode==='system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme',mode);
+  $all('.theme-btn').forEach(b=>b.classList.toggle('active', b.dataset.theme===mode));
+  try{ localStorage.setItem('planner-theme', mode); }catch(e){}
+}
+$all('.theme-btn').forEach(b=>b.addEventListener('click', ()=>applyTheme(b.dataset.theme)));
+try{ applyTheme(localStorage.getItem('planner-theme')||'system'); }catch(e){ applyTheme('system'); }
+
+/* ================= nav ================= */
+const viewTitles={home:'Início',books:'Livros',articles:'Artigos',agenda:'Agenda',patients:'Retornos',finance:'Financeiro'};
+function showView(name){
+  $all('.view').forEach(v=>v.classList.toggle('active', v.id==='view-'+name));
+  $all('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.view===name));
+  $('#mobileTitle').textContent=viewTitles[name]||'';
+  closeSidebar();
+  if(name==='books') renderBooks();
+  if(name==='articles') renderArticles();
+  if(name==='agenda'){ renderCalFrame(); renderEvents(); }
+  if(name==='patients') renderPatients();
+  if(name==='finance') renderFinance();
+  if(name==='home') renderHome();
+}
+$all('.tab-btn').forEach(b=>b.addEventListener('click', ()=>showView(b.dataset.view)));
+function openSidebar(){ $('#sidebar').classList.add('open'); $('#scrim').classList.add('open'); }
+function closeSidebar(){ $('#sidebar').classList.remove('open'); $('#scrim').classList.remove('open'); }
+$('#btnMenu')?.addEventListener('click', openSidebar);
+$('#scrim').addEventListener('click', closeSidebar);
+$('#todayLabel').textContent = new Date().toLocaleDateString('pt-BR',{weekday:'long', day:'numeric', month:'long'});
+
+/* ================= modal ================= */
+function openModal(html){ $('#modalBody').innerHTML=html; $('#modalScrim').hidden=false; }
+function closeModal(){ $('#modalScrim').hidden=true; $('#modalBody').innerHTML=''; }
+$('#modalScrim').addEventListener('click', e=>{ if(e.target.id==='modalScrim') closeModal(); });
+
+/* ================= state ================= */
+let cache={ books:[], articles:[], events:[], patients:[], finance:{}, config:{} };
+
+async function boot(){
+  cache.books = await idbGetAll('books');
+  cache.articles = await idbGetAll('articles');
+  cache.events = await idbGetAll('events');
+  cache.patients = await idbGetAll('patients');
+  cache.config = (await idbGet('config','main')) || {id:'main'};
+  cache.books.sort((a,b)=> (b.createdAt||'').localeCompare(a.createdAt||''));
+  cache.articles.sort((a,b)=> (b.createdAt||'').localeCompare(a.createdAt||''));
+  cache.events.sort((a,b)=> (a.date||'').localeCompare(b.date||''));
+  cache.patients.sort((a,b)=> (b.createdAt||'').localeCompare(a.createdAt||''));
+  await loadFinanceMonth(curMonth);
+  renderBrand();
+  renderHome();
+}
+
+/* ================= BRAND / LOGO ================= */
+function renderBrand(){
+  const c=cache.config||{};
+  $('#brandName').textContent = c.name || 'Meu Consultório';
+  const zone=$('#logoZone');
+  if(c.logoAssetId){
+    zone.className='logo-zone filled';
+    zone.innerHTML = `<img data-asset="${c.logoAssetId}" alt="logo"><div class="swap">trocar logo</div>`;
+    hydrateImages(zone);
+  } else {
+    zone.className='logo-zone empty';
+    zone.innerHTML = `<span class="plus">+</span><span class="lbl">Adicionar logo</span>`;
+  }
+}
+$('#logoZone').addEventListener('click', ()=>$('#hiddenLogoFile').click());
+$('#hiddenLogoFile').addEventListener('change', async (e)=>{
+  const f=e.target.files[0]; if(!f) return;
+  try{
+    const r=await assetUpload(f);
+    cache.config={...cache.config, id:'main', logoAssetId:r.id};
+    await idbPut('config', cache.config);
+    renderBrand();
+    toast('Logo atualizada');
+  }catch(err){ toast('Não foi possível enviar a imagem'); }
+  e.target.value='';
+});
+$('#brandName').addEventListener('click', async ()=>{
+  const cur=(cache.config&&cache.config.name)||'Meu Consultório';
+  const name=prompt('Nome exibido no topo:', cur);
+  if(name==null) return;
+  cache.config={...cache.config, id:'main', name:name.trim()||'Meu Consultório'};
+  await idbPut('config', cache.config);
+  renderBrand();
+});
+
+/* ================= HOME ================= */
+function renderHome(){
+  const reading = cache.books.filter(b=>b.status==='lendo');
+  $('#statBooks').textContent = reading.length;
+  $('#statArticles').textContent = cache.articles.filter(a=>a.status!=='lido').length;
+  $('#statPatients').textContent = cache.patients.filter(p=>p.status!=='marcado').length;
+
+  const f=cache.finance||{};
+  const bal = finBalance(f);
+  $('#statBalance').textContent = fmtBRL(bal);
+  $('#statBalance').style.color = bal<0 ? 'var(--danger)' : 'var(--good)';
+  $('#statBalanceSub').textContent = new Date().toLocaleDateString('pt-BR',{month:'long'});
+
+  const hb=$('#homeBooks');
+  hb.innerHTML = reading.length? reading.slice(0,5).map(b=>{
+    const pct=bookProgress(b);
+    return `<div class="mini-row"><span class="t">${esc(b.title)}</span><span class="d num">${pct}%</span></div>`;
+  }).join('') : '<div style="color:var(--ink-faint);font-size:12.5px;">Nenhuma leitura em andamento.</div>';
+
+  const pend = cache.patients.filter(p=>p.status!=='marcado').sort((a,b)=>(a.dueDate||'9999').localeCompare(b.dueDate||'9999'));
+  const hp=$('#homePatients');
+  hp.innerHTML = pend.length? pend.slice(0,5).map(p=>`
+    <div class="mini-row"><span class="t">${esc(p.code)} — ${esc(p.reason||'')}</span><span class="d">${p.dueDate?fmtDateShort(p.dueDate):''}</span></div>
+  `).join('') : '<div style="color:var(--ink-faint);font-size:12.5px;">Nenhum retorno pendente.</div>';
+}
+
+/* ================= BOOKS ================= */
+const statusLabel={quero_ler:'Quero ler', lendo:'Lendo', lido:'Lido'};
+const statusPill={quero_ler:'pill-navy', lendo:'pill-petrol', lido:'pill-wine'};
+function bookProgress(b){
+  const pages=Number(b.pages)||0, cur=Number(b.currentPage)||0;
+  if(pages>0) return Math.max(0, Math.min(100, Math.round(cur/pages*100)));
+  return Math.max(0, Math.min(100, Number(b.progress)||0));
+}
+function renderBooks(){
+  const filter=$('#bookFilter').value;
+  const list = cache.books.filter(b=> filter==='all' || b.status===filter);
+  const grid=$('#bookGrid');
+  $('#bookEmpty').hidden = cache.books.length>0;
+  grid.innerHTML = list.map(b=>{
+    const pct=bookProgress(b);
+    const coverInner = b.coverAssetId ? `<img data-asset="${b.coverAssetId}" alt="">`
+      : b.coverUrl ? `<img src="${esc(b.coverUrl)}" alt="">`
+      : `<div class="ph">${esc(b.title||'')}</div>`;
+    return `
+    <div class="book-card" data-id="${b.id}">
+      <div class="book-cover">${coverInner}</div>
+      <div class="book-body">
+        <div class="book-title">${esc(b.title||'Sem título')}</div>
+        <div class="book-author">${esc(b.author||'')}</div>
+        <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+        <div class="book-foot">
+          <span class="pill ${statusPill[b.status]||'pill-muted'}">${statusLabel[b.status]||b.status}</span>
+          <span class="prog-pct num">${b.pages? (b.currentPage||0)+'/'+b.pages : pct+'%'}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  hydrateImages(grid);
+  $all('.book-card', grid).forEach(el=> el.addEventListener('click', ()=> openBookModal(cache.books.find(b=>b.id===el.dataset.id))));
+}
+$('#bookFilter').addEventListener('change', renderBooks);
+$('#btnAddBook').addEventListener('click', ()=>openBookModal(null));
+
+let coverFetchToken=0;
+function openBookModal(book){
+  const b=book||{title:'',author:'',status:'quero_ler',pages:'',currentPage:'',coverUrl:'',coverAssetId:'',notes:''};
+  openModal(`
+    <h2>${book?'Editar livro':'Novo livro'}</h2>
+    <div class="cover-pick">
+      <div class="cover-preview" id="mCoverPreview" title="Clique para enviar uma capa manualmente">
+        ${b.coverAssetId? `<img data-asset="${b.coverAssetId}">` : b.coverUrl? `<img src="${esc(b.coverUrl)}">` : `<span class="hint">capa<br>automática</span>`}
+      </div>
+      <input type="file" id="mCoverFile" accept="image/*" hidden>
+      <div style="flex:1;">
+        <div class="field"><label>Título</label><input id="mTitle" value="${esc(b.title)}" placeholder="Ex: O Cérebro e a Mente"></div>
+        <div class="field" style="margin-top:8px;"><label>Autor</label><input id="mAuthor" value="${esc(b.author)}" placeholder="Ex: Dalgalarrondo"></div>
+        <div class="fetch-status" id="mFetchStatus">Digite título e autor para buscar a capa.</div>
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px;">
+      <div class="field"><label>Status</label>
+        <select id="mStatus">
+          <option value="quero_ler" ${b.status==='quero_ler'?'selected':''}>Quero ler</option>
+          <option value="lendo" ${b.status==='lendo'?'selected':''}>Lendo</option>
+          <option value="lido" ${b.status==='lido'?'selected':''}>Lido</option>
+        </select>
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px;">
+      <div class="field"><label>Página atual</label><input id="mCurPage" type="number" min="0" value="${b.currentPage||''}"></div>
+      <div class="field"><label>Total de páginas</label><input id="mPages" type="number" min="0" value="${b.pages||''}"></div>
+    </div>
+    <div class="pages-progress"><span class="badge num" id="mProgBadge">${bookProgress(b)}% concluído</span></div>
+    <div class="field" style="margin-top:12px;"><label>Notas</label><textarea id="mNotes" rows="2">${esc(b.notes||'')}</textarea></div>
+    <div class="modal-foot">
+      ${book?'<button class="btn btn-danger-ghost" id="mDelete" style="margin-right:auto;">Excluir</button>':''}
+      <button class="btn" id="mCancel">Cancelar</button>
+      <button class="btn btn-primary" id="mSave">Salvar</button>
+    </div>
+  `);
+  hydrateImages($('#modalBody'));
+  let coverUrl=b.coverUrl||'', coverAssetId=b.coverAssetId||'';
+  const updateBadge=()=>{
+    const pages=Number($('#mPages').value)||0, cur=Number($('#mCurPage').value)||0;
+    const pct = pages>0 ? Math.max(0,Math.min(100,Math.round(cur/pages*100))) : 0;
+    $('#mProgBadge').textContent = pct+'% concluído';
+  };
+  $('#mCurPage').addEventListener('input', updateBadge);
+  $('#mPages').addEventListener('input', updateBadge);
+
+  async function tryFetchCover(){
+    const title=$('#mTitle').value.trim(), author=$('#mAuthor').value.trim();
+    if(!title || coverAssetId) return;
+    const myToken=++coverFetchToken;
+    $('#mFetchStatus').textContent='Buscando capa…';
+    try{
+      const q=encodeURIComponent(`intitle:${title}${author?` inauthor:${author}`:''}`);
+      const res=await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=1`);
+      const json=await res.json();
+      if(myToken!==coverFetchToken) return;
+      const item=json.items && json.items[0];
+      const thumb=item && item.volumeInfo && item.volumeInfo.imageLinks && (item.volumeInfo.imageLinks.thumbnail || item.volumeInfo.imageLinks.smallThumbnail);
+      if(thumb){
+        coverUrl=thumb.replace('http://','https://').replace('&edge=curl','');
+        $('#mCoverPreview').innerHTML=`<img src="${esc(coverUrl)}">`;
+        $('#mFetchStatus').textContent='Capa encontrada automaticamente ✓';
+      } else {
+        $('#mFetchStatus').textContent='Nenhuma capa encontrada — você pode enviar uma manualmente.';
+      }
+    }catch(err){
+      if(myToken!==coverFetchToken) return;
+      $('#mFetchStatus').textContent='Não foi possível buscar a capa agora — você pode enviar uma manualmente.';
+    }
+  }
+  let debounceT;
+  ['#mTitle','#mAuthor'].forEach(sel=>{
+    $(sel).addEventListener('input', ()=>{ clearTimeout(debounceT); debounceT=setTimeout(tryFetchCover, 700); });
+  });
+  if(!book && b.title) tryFetchCover();
+
+  $('#mCoverPreview').addEventListener('click', ()=>$('#mCoverFile').click());
+  $('#mCoverFile').addEventListener('change', async e=>{
+    const f=e.target.files[0]; if(!f) return;
+    try{
+      const r=await assetUpload(f);
+      coverAssetId=r.id; coverUrl='';
+      $('#mCoverPreview').innerHTML=`<img src="${r.url}">`;
+      $('#mFetchStatus').textContent='Capa enviada manualmente ✓';
+    }catch(err){ toast('Não foi possível enviar a capa'); }
+  });
+
+  $('#mCancel').addEventListener('click', closeModal);
+  $('#mDelete')?.addEventListener('click', async ()=>{
+    await idbDelete('books', book.id);
+    cache.books=cache.books.filter(x=>x.id!==book.id);
+    closeModal(); renderBooks(); renderHome(); toast('Livro removido');
+  });
+  $('#mSave').addEventListener('click', async ()=>{
+    const pages=Number($('#mPages').value)||0, curPage=Number($('#mCurPage').value)||0;
+    const title=$('#mTitle').value.trim();
+    if(!title){ toast('Dê um título ao livro'); return; }
+    const data={
+      id: book? book.id : uid(),
+      title, author: $('#mAuthor').value.trim(),
+      status: $('#mStatus').value,
+      pages, currentPage: curPage,
+      progress: pages>0 ? Math.max(0,Math.min(100,Math.round(curPage/pages*100))) : 0,
+      coverUrl, coverAssetId,
+      notes: $('#mNotes').value.trim(),
+      createdAt: book? book.createdAt : new Date().toISOString(),
+    };
+    await idbPut('books', data);
+    if(book) Object.assign(book, data); else cache.books.unshift(data);
+    closeModal(); renderBooks(); renderHome(); toast('Livro salvo');
+  });
+}
+
+/* ================= ARTICLES ================= */
+function renderArticles(){
+  const list=[...cache.articles].sort((a,b)=> (a.status==='lido')-(b.status==='lido'));
+  $('#articleEmpty').hidden = list.length>0;
+  $('#articleList').innerHTML = list.map(a=>`
+    <div class="art-row" data-id="${a.id}">
+      <button class="art-check ${a.status==='lido'?'done':''}" data-toggle="${a.id}">
+        ${a.status==='lido'? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l6 6L20 6"/></svg>':''}
+      </button>
+      <div class="art-main" data-open="${a.id}">
+        <div class="art-title ${a.status==='lido'?'done':''}">${esc(a.title||'Sem título')}</div>
+        <div class="art-meta">${a.source?`<span>${esc(a.source)}</span>`:''}${a.attachmentId?`<span>📎 ${esc(a.attachmentName||'anexo')}</span>`:''}</div>
+        ${a.tags&&a.tags.length? `<div class="tag-row">${a.tags.map(t=>`<span class="pill pill-muted">${esc(t)}</span>`).join('')}</div>`:''}
+      </div>
+    </div>
+  `).join('');
+  $all('[data-toggle]', $('#articleList')).forEach(el=>el.addEventListener('click', async e=>{
+    e.stopPropagation();
+    const id=el.dataset.toggle; const a=cache.articles.find(x=>x.id===id);
+    a.status = a.status==='lido' ? 'pendente' : 'lido';
+    await idbPut('articles', a);
+    renderArticles(); renderHome();
+  }));
+  $all('[data-open]', $('#articleList')).forEach(el=>el.addEventListener('click', ()=> openArticleModal(cache.articles.find(x=>x.id===el.dataset.open))));
+}
+$('#btnAddArticle').addEventListener('click', ()=>openArticleModal(null));
+
+function openArticleModal(article){
+  const a=article||{title:'',source:'',status:'pendente',tags:[],notes:'',attachmentId:'',attachmentName:''};
+  openModal(`
+    <h2>${article?'Editar artigo':'Novo artigo'}</h2>
+    <div class="field"><label>Título</label><input id="mATitle" value="${esc(a.title)}" placeholder="Ex: Stahl — farmacologia dos antipsicóticos"></div>
+    <div class="field" style="margin-top:12px;"><label>Fonte / revista</label><input id="mASource" value="${esc(a.source)}" placeholder="Ex: American Journal of Psychiatry"></div>
+    <div class="field" style="margin-top:12px;"><label>Tags (separadas por vírgula)</label><input id="mATags" value="${esc((a.tags||[]).join(', '))}" placeholder="psicofarmacologia, revisão"></div>
+    <div class="field" style="margin-top:12px;">
+      <label>Anexo</label>
+      <div class="file-drop" id="mAFileDrop">Clique para anexar PDF, imagem ou documento</div>
+      <input type="file" id="mAFile" hidden accept=".pdf,image/*,.doc,.docx">
+      <div id="mAChipWrap">${a.attachmentId?`<span class="attach-chip">📎 ${esc(a.attachmentName)}</span>`:''}</div>
+    </div>
+    <div class="field" style="margin-top:12px;"><label>Notas</label><textarea id="mANotes" rows="2">${esc(a.notes||'')}</textarea></div>
+    <div class="modal-foot">
+      ${article?'<button class="btn btn-danger-ghost" id="mADelete" style="margin-right:auto;">Excluir</button>':''}
+      <button class="btn" id="mACancel">Cancelar</button>
+      <button class="btn btn-primary" id="mASave">Salvar</button>
+    </div>
+  `);
+  let attach={id:a.attachmentId||'', name:a.attachmentName||''};
+  $('#mAFileDrop').addEventListener('click', ()=>$('#mAFile').click());
+  $('#mAFile').addEventListener('change', async e=>{
+    const f=e.target.files[0]; if(!f) return;
+    try{
+      const r=await assetUpload(f);
+      attach={id:r.id, name:f.name};
+      $('#mAChipWrap').innerHTML=`<span class="attach-chip">📎 ${esc(f.name)}</span>`;
+      toast('Anexo salvo');
+    }catch(err){ toast('Não foi possível salvar o anexo'); }
+  });
+  $('#mACancel').addEventListener('click', closeModal);
+  $('#mADelete')?.addEventListener('click', async ()=>{
+    await idbDelete('articles', article.id);
+    cache.articles=cache.articles.filter(x=>x.id!==article.id);
+    closeModal(); renderArticles(); renderHome(); toast('Artigo removido');
+  });
+  $('#mASave').addEventListener('click', async ()=>{
+    const title=$('#mATitle').value.trim();
+    if(!title){ toast('Dê um título ao artigo'); return; }
+    const data={
+      id: article? article.id : uid(),
+      title, source:$('#mASource').value.trim(),
+      tags:$('#mATags').value.split(',').map(s=>s.trim()).filter(Boolean),
+      notes:$('#mANotes').value.trim(),
+      attachmentId:attach.id, attachmentName:attach.name,
+      status:a.status||'pendente',
+      createdAt: article? article.createdAt : new Date().toISOString(),
+    };
+    await idbPut('articles', data);
+    if(article) Object.assign(article, data); else cache.articles.unshift(data);
+    closeModal(); renderArticles(); renderHome(); toast('Artigo salvo');
+  });
+}
+
+/* ================= AGENDA ================= */
+function renderCalFrame(){
+  const url=cache.config && cache.config.calendarUrl;
+  const wrap=$('#calFrameWrap');
+  if(url){
+    wrap.innerHTML = `<iframe src="${esc(url)}" loading="lazy"></iframe>`;
+  } else {
+    wrap.innerHTML = `<div class="cal-setup">
+      <p style="font-size:13px;color:var(--ink-muted);line-height:1.5;">
+        No Google Agenda: <b>Configurações</b> → sua agenda → <b>Integrar agenda</b> → copie o
+        <i>"Código de incorporação"</i> (o link dentro de <code>src="..."</code>) e cole abaixo.
+      </p>
+      <div class="row" style="margin-top:10px;">
+        <div class="field" style="flex:1;"><label>Link de incorporação</label><input id="calUrlInput" placeholder="https://calendar.google.com/calendar/embed?src=..."></div>
+      </div>
+      <button class="btn btn-primary btn-sm" style="margin-top:10px;" id="btnSaveCal">Salvar</button>
+    </div>`;
+    $('#btnSaveCal').addEventListener('click', async ()=>{
+      const val=$('#calUrlInput').value.trim();
+      if(!val){ toast('Cole o link de incorporação'); return; }
+      cache.config={...cache.config, id:'main', calendarUrl:val};
+      await idbPut('config', cache.config);
+      renderCalFrame(); toast('Agenda conectada');
+    });
+  }
+}
+$('#btnCalSettings').addEventListener('click', ()=>{
+  openModal(`
+    <h2>Google Agenda</h2>
+    <p style="font-size:12.5px;color:var(--ink-muted);line-height:1.5;margin-bottom:10px;">Cole novamente o link para atualizar, ou apague e salve para remover.</p>
+    <div class="field"><label>Link de incorporação</label><input id="mCalUrl" value="${esc((cache.config&&cache.config.calendarUrl)||'')}"></div>
+    <div class="modal-foot"><button class="btn" id="mCalCancel">Cancelar</button><button class="btn btn-primary" id="mCalSave">Salvar</button></div>
+  `);
+  $('#mCalCancel').addEventListener('click', closeModal);
+  $('#mCalSave').addEventListener('click', async ()=>{
+    const val=$('#mCalUrl').value.trim();
+    cache.config={...cache.config, id:'main', calendarUrl:val};
+    await idbPut('config', cache.config);
+    closeModal(); renderCalFrame(); toast(val?'Agenda conectada':'Agenda removida');
+  });
+});
+
+function renderEvents(){
+  const list=[...cache.events].sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.time||'').localeCompare(b.time||''));
+  $('#eventEmpty').hidden = list.length>0;
+  const groups={};
+  list.forEach(ev=>{ const k=ev.date||'sem-data'; (groups[k]=groups[k]||[]).push(ev); });
+  const keys=Object.keys(groups).sort();
+  $('#eventsWrap').innerHTML = keys.map(k=>{
+    const d=k!=='sem-data'? new Date(k+'T00:00:00') : null;
+    const head = d? `${weekdaysPt[d.getDay()]}, ${d.getDate()} de ${monthsPt[d.getMonth()]}` : 'Sem data';
+    return `<div class="day-group">
+      <div class="day-head">${head}</div>
+      <div class="card">
+        ${groups[k].map(ev=>`
+          <div class="event-row" data-id="${ev.id}">
+            <span class="event-dot"></span>
+            <span class="event-time">${esc(ev.time||'')}</span>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:13.5px;font-weight:600;">${esc(ev.title||'')}</div>
+              ${ev.notes?`<div style="font-size:11.5px;color:var(--ink-faint);">${esc(ev.notes)}</div>`:''}
+            </div>
+            <button class="icon-btn" data-del="${ev.id}">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0 1 12a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-12"/></svg>
+            </button>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+  $all('[data-del]', $('#eventsWrap')).forEach(el=>el.addEventListener('click', async ()=>{
+    const id=el.dataset.del;
+    await idbDelete('events', id);
+    cache.events=cache.events.filter(x=>x.id!==id);
+    renderEvents();
+  }));
+}
+$('#btnAddEvent').addEventListener('click', ()=>{
+  openModal(`
+    <h2>Novo compromisso</h2>
+    <div class="field"><label>Título</label><input id="mETitle" placeholder="Ex: Supervisão clínica"></div>
+    <div class="row" style="margin-top:12px;">
+      <div class="field"><label>Data</label><input id="mEDate" type="date" value="${todayISO()}"></div>
+      <div class="field"><label>Hora</label><input id="mETime" type="time"></div>
+    </div>
+    <div class="field" style="margin-top:12px;"><label>Notas</label><input id="mENotes" placeholder="opcional"></div>
+    <div class="modal-foot"><button class="btn" id="mECancel">Cancelar</button><button class="btn btn-primary" id="mESave">Adicionar</button></div>
+  `);
+  $('#mECancel').addEventListener('click', closeModal);
+  $('#mESave').addEventListener('click', async ()=>{
+    const title=$('#mETitle').value.trim();
+    if(!title){ toast('Dê um título ao compromisso'); return; }
+    const data={id:uid(), title, date:$('#mEDate').value, time:$('#mETime').value, notes:$('#mENotes').value.trim()};
+    await idbPut('events', data);
+    cache.events.push(data);
+    closeModal(); renderEvents(); toast('Compromisso adicionado');
+  });
+});
+
+/* ================= PATIENTS ================= */
+function renderPatients(){
+  const list=[...cache.patients].sort((a,b)=>(a.status==='marcado')-(b.status==='marcado') || (a.dueDate||'9999').localeCompare(b.dueDate||'9999'));
+  $('#patientEmpty').hidden = list.length>0;
+  $('#patientList').innerHTML = list.map(p=>`
+    <div class="pt-row" data-id="${p.id}">
+      <span class="pt-code">${esc(p.code||'—')}</span>
+      <div class="pt-main" data-edit="${p.id}">
+        <div class="pt-reason">${esc(p.reason||'')}</div>
+        <div class="pt-meta">${p.dueDate?`marcar até ${fmtDateShort(p.dueDate)}`:'sem prazo'}${p.priority?` · prioridade ${esc(p.priority)}`:''}</div>
+      </div>
+      <span class="pill ${p.status==='marcado'?'pill-petrol':'pill-wine'}">${p.status==='marcado'?'Marcado':'A marcar'}</span>
+    </div>
+  `).join('');
+  $all('[data-edit]', $('#patientList')).forEach(el=>el.addEventListener('click', ()=>openPatientModal(cache.patients.find(x=>x.id===el.dataset.edit))));
+}
+$('#btnAddPatient').addEventListener('click', ()=>openPatientModal(null));
+
+function openPatientModal(p0){
+  const p=p0||{code:'',reason:'',dueDate:'',priority:'média',status:'a_marcar',notes:''};
+  openModal(`
+    <h2>${p0?'Editar retorno':'Novo retorno'}</h2>
+    <div class="field"><label>Iniciais / código</label><input id="mPCode" value="${esc(p.code)}" placeholder="Ex: M.S. #12"></div>
+    <div class="field" style="margin-top:12px;"><label>Motivo do retorno</label><input id="mPReason" value="${esc(p.reason)}" placeholder="Ex: reavaliar dose de sertralina"></div>
+    <div class="row" style="margin-top:12px;">
+      <div class="field"><label>Marcar até</label><input id="mPDate" type="date" value="${p.dueDate||''}"></div>
+      <div class="field"><label>Prioridade</label>
+        <select id="mPPriority">
+          <option value="baixa" ${p.priority==='baixa'?'selected':''}>Baixa</option>
+          <option value="média" ${p.priority==='média'?'selected':''}>Média</option>
+          <option value="alta" ${p.priority==='alta'?'selected':''}>Alta</option>
+        </select>
+      </div>
+    </div>
+    <div class="field" style="margin-top:12px;"><label>Status</label>
+      <select id="mPStatus">
+        <option value="a_marcar" ${p.status==='a_marcar'?'selected':''}>A marcar</option>
+        <option value="marcado" ${p.status==='marcado'?'selected':''}>Marcado</option>
+      </select>
+    </div>
+    <div class="field" style="margin-top:12px;"><label>Notas</label><textarea id="mPNotes" rows="2">${esc(p.notes||'')}</textarea></div>
+    <div class="modal-foot">
+      ${p0?'<button class="btn btn-danger-ghost" id="mPDelete" style="margin-right:auto;">Excluir</button>':''}
+      <button class="btn" id="mPCancel">Cancelar</button>
+      <button class="btn btn-primary" id="mPSave">Salvar</button>
+    </div>
+  `);
+  $('#mPCancel').addEventListener('click', closeModal);
+  $('#mPDelete')?.addEventListener('click', async ()=>{
+    await idbDelete('patients', p0.id);
+    cache.patients=cache.patients.filter(x=>x.id!==p0.id);
+    closeModal(); renderPatients(); renderHome(); toast('Removido');
+  });
+  $('#mPSave').addEventListener('click', async ()=>{
+    const code=$('#mPCode').value.trim();
+    if(!code){ toast('Informe iniciais ou um código'); return; }
+    const data={
+      id: p0? p0.id : uid(),
+      code, reason:$('#mPReason').value.trim(),
+      dueDate:$('#mPDate').value, priority:$('#mPPriority').value, status:$('#mPStatus').value,
+      notes:$('#mPNotes').value.trim(),
+      createdAt: p0? p0.createdAt : new Date().toISOString(),
+    };
+    await idbPut('patients', data);
+    if(p0) Object.assign(p0, data); else cache.patients.unshift(data);
+    closeModal(); renderPatients(); renderHome(); toast('Salvo');
+  });
+}
+
+/* ================= FINANCE ================= */
+let curMonth = monthKey();
+$('#monthPicker').value = curMonth;
+function finTotal(arr){ return (arr||[]).reduce((s,i)=>s+(Number(i.value)||0),0); }
+function finBalance(f){ f=f||{}; return finTotal(f.income) - finTotal(f.fixed) - finTotal(f.groceries) - finTotal(f.fun); }
+async function loadFinanceMonth(key){
+  const rec = await idbGet('finance', key);
+  cache.finance = rec || {id:key, income:[],fixed:[],groceries:[],fun:[],investPercent:20};
+  if(currentView()==='finance') renderFinance();
+  renderHome();
+}
+function currentView(){ const v=$all('.view').find(v=>v.classList.contains('active')); return v? v.id.replace('view-',''):'home'; }
+$('#monthPicker').addEventListener('change', e=>{ curMonth = e.target.value || monthKey(); loadFinanceMonth(curMonth); });
+$('#monthPrev').addEventListener('click', ()=>shiftMonth(-1));
+$('#monthNext').addEventListener('click', ()=>shiftMonth(1));
+function shiftMonth(delta){
+  const [y,m]=curMonth.split('-').map(Number);
+  const d=new Date(y, m-1+delta, 1);
+  curMonth=monthKey(d);
+  $('#monthPicker').value=curMonth;
+  loadFinanceMonth(curMonth);
+}
+async function saveFinanceField(patch){
+  cache.finance={...cache.finance, id:curMonth, ...patch};
+  await idbPut('finance', cache.finance);
+  renderFinance(); renderHome();
+}
+function renderFinList(containerId, key){
+  const items=cache.finance[key]||[];
+  $(`#${containerId}`).innerHTML = items.map((it,idx)=>`
+    <div class="fin-item">
+      <span class="lbl">${esc(it.label||'—')}</span>
+      <span class="val">${fmtBRL(it.value)}</span>
+      <button class="icon-btn" data-rm="${key}:${idx}" style="margin-left:2px;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+  `).join('') || `<div style="font-size:12px;color:var(--ink-faint);padding:6px 0;">Nada adicionado.</div>`;
+}
+function renderFinance(){
+  const f=cache.finance||{};
+  ['income','fixed','groceries','fun'].forEach(k=>{
+    renderFinList(k+'Items', k);
+    $(`#${k}Total`).textContent = fmtBRL(finTotal(f[k]));
+  });
+  $('#finIncome').textContent = fmtBRL(finTotal(f.income));
+  $('#finFixed').textContent = fmtBRL(finTotal(f.fixed));
+  $('#finVar').textContent = fmtBRL(finTotal(f.groceries)+finTotal(f.fun));
+  const bal = finBalance(f);
+  const balEl=$('#finBalance'); balEl.textContent=fmtBRL(bal); balEl.style.color = bal<0?'var(--danger)':'var(--good)';
+  const pct = f.investPercent!=null ? f.investPercent : 20;
+  $('#investSlider').value = pct;
+  $('#investPct').textContent = pct+'%';
+  const investVal = Math.max(0, bal) * (pct/100);
+  $('#investValue').textContent = fmtBRL(investVal);
+  $('#investAnnual').textContent = fmtBRL(investVal*12);
+  $('#investFree').textContent = fmtBRL(Math.max(0,bal) - investVal);
+  $all('[data-rm]', document.getElementById('view-finance')).forEach(el=>el.addEventListener('click', ()=>{
+    const [key,idx]=el.dataset.rm.split(':');
+    const arr=[...(cache.finance[key]||[])]; arr.splice(Number(idx),1);
+    saveFinanceField({[key]:arr});
+  }));
+}
+$all('[data-add]').forEach(btn=>btn.addEventListener('click', ()=>{
+  const key=btn.dataset.add;
+  const labelHints={income:'Ex: Salário CLT / plantão', fixed:'Ex: Aluguel, internet, academia', groceries:'Ex: Supermercado da semana', fun:'Ex: Delivery, streaming, compras'};
+  openModal(`
+    <h2>Adicionar item</h2>
+    <div class="field"><label>Descrição</label><input id="mFLabel" placeholder="${labelHints[key]||''}"></div>
+    <div class="field" style="margin-top:12px;"><label>Valor (R$)</label><input id="mFValue" type="number" step="0.01" placeholder="0,00"></div>
+    <div class="modal-foot"><button class="btn" id="mFCancel">Cancelar</button><button class="btn btn-primary" id="mFSave">Adicionar</button></div>
+  `);
+  $('#mFCancel').addEventListener('click', closeModal);
+  $('#mFSave').addEventListener('click', ()=>{
+    const label=$('#mFLabel').value.trim(); const value=Number($('#mFValue').value)||0;
+    if(!label){ toast('Descreva o item'); return; }
+    const arr=[...(cache.finance[key]||[]), {label,value}];
+    saveFinanceField({[key]:arr});
+    closeModal(); toast('Adicionado');
+  });
+}));
+$('#investSlider').addEventListener('input', e=>{ $('#investPct').textContent=e.target.value+'%'; });
+$('#investSlider').addEventListener('change', e=>{ saveFinanceField({investPercent:Number(e.target.value)}); });
+
+/* ================= EXPORT / IMPORT (backup) ================= */
+function blobToBase64(blob){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onloadend=()=>res(r.result); r.onerror=rej; r.readAsDataURL(blob); }); }
+async function exportBackup(){
+  const data={};
+  for(const s of ['books','articles','events','patients','finance','config']) data[s]=await idbGetAll(s);
+  const assetsList=await idbGetAll('assets');
+  data.assets=[];
+  for(const a of assetsList){
+    const base64=await blobToBase64(a.blob);
+    data.assets.push({id:a.id, contentType:a.contentType, name:a.name, createdAt:a.createdAt, base64});
+  }
+  const json=JSON.stringify(data);
+  const blob=new Blob([json],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download=`backup-consultorio-vida-${todayISO()}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 4000);
+  toast('Backup exportado');
+}
+async function importBackup(file){
+  try{
+    const text=await file.text();
+    const data=JSON.parse(text);
+    for(const s of ['books','articles','events','patients','finance','config']){
+      for(const rec of (data[s]||[])) await idbPut(s, rec);
+    }
+    for(const a of (data.assets||[])){
+      const blob=await (await fetch(a.base64)).blob();
+      await idbPut('assets', {id:a.id, blob, contentType:a.contentType, name:a.name, createdAt:a.createdAt});
+    }
+    toast('Backup importado — recarregando…');
+    setTimeout(()=>location.reload(), 1200);
+  }catch(err){ toast('Não foi possível importar esse arquivo'); }
+}
+$('#btnExport').addEventListener('click', exportBackup);
+$('#btnImport').addEventListener('click', ()=>$('#importFile').click());
+$('#importFile').addEventListener('change', e=>{ const f=e.target.files[0]; if(f) importBackup(f); e.target.value=''; });
+
+boot();
+})();
+</script>
+</body>
+</html>
