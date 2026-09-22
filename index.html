@@ -1027,21 +1027,34 @@ async function callAi(userPrompt, maxTokens){
   const cfg=getAiConfig();
   if(!cfg.apiKey) throw new Error('Configure sua chave da API em "🤖 Configurar IA", no menu lateral.');
   const url=`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(cfg.model)}:generateContent?key=${encodeURIComponent(cfg.apiKey)}`;
-  const res=await fetch(url, {
-    method:'POST',
-    headers:{ 'content-type':'application/json' },
-    body: JSON.stringify({
-      contents:[{ parts:[{ text:userPrompt }] }],
-      generationConfig:{ maxOutputTokens:maxTokens||1500 },
-    }),
-  });
-  const json=await res.json().catch(()=>null);
+  async function doRequest(withThinkingOff){
+    const generationConfig={ maxOutputTokens:maxTokens||3000 };
+    // Modelos "thinking" gastam parte do maxOutputTokens com raciocínio
+    // interno antes de escrever a resposta final — desligamos isso quando
+    // o modelo aceita essa opção. Nem todo modelo aceita o campo, então
+    // se der erro por causa dele, tentamos de novo sem ele.
+    if(withThinkingOff) generationConfig.thinkingConfig={ thinkingBudget:0 };
+    return fetch(url, {
+      method:'POST',
+      headers:{ 'content-type':'application/json' },
+      body: JSON.stringify({ contents:[{ parts:[{ text:userPrompt }] }], generationConfig }),
+    });
+  }
+  let res=await doRequest(true);
+  let json=await res.json().catch(()=>null);
+  if(!res.ok && json && json.error && /thinking/i.test(json.error.message||'')){
+    res=await doRequest(false);
+    json=await res.json().catch(()=>null);
+  }
   if(!res.ok){ throw new Error((json && json.error && json.error.message) || `Erro ${res.status} na API do Gemini`); }
   const cand=json && json.candidates && json.candidates[0];
-  const text=(cand && cand.content && cand.content.parts || []).map(p=>p.text||'').join('\n').trim();
+  let text=(cand && cand.content && cand.content.parts || []).map(p=>p.text||'').join('\n').trim();
   if(!text){
     const blockReason=json && json.promptFeedback && json.promptFeedback.blockReason;
     throw new Error(blockReason? `A IA bloqueou a resposta (${blockReason}).` : 'A IA não retornou texto.');
+  }
+  if(cand && cand.finishReason==='MAX_TOKENS'){
+    text += '\n\n[⚠️ a resposta foi cortada por atingir o limite de tamanho — se faltou parte do resumo, clique em "Gerar resumo com IA" de novo]';
   }
   return text;
 }
@@ -1077,7 +1090,7 @@ TEXTO EXTRAÍDO DO PDF:
 """
 ${text}
 """`;
-  return await callAi(prompt, 1400);
+  return await callAi(prompt, 3000);
 }
 
 /* ================= PDF reader ================= */
@@ -1570,6 +1583,7 @@ function renderArticles(){
   $('#articleEmpty').hidden = list.length>0;
   $('#articleList').innerHTML = list.map(a=>{
     const thumb = a.coverAssetId ? `<img data-asset="${a.coverAssetId}">` : '📄';
+    const hasPdf=!!(a.pdfAssetId || a.driveFileId);
     return `
     <div class="art-row" data-id="${a.id}">
       <button class="art-check ${a.status==='lido'?'done':''}" data-toggle="${a.id}">
@@ -1581,6 +1595,7 @@ function renderArticles(){
         <div class="art-meta">${a.source?`<span>${esc(a.source)}</span>`:''}${a.pages?`<span>${a.currentPage||0}/${a.pages} pág.</span>`:''}${a.attachmentId&&!a.pdfAssetId?`<span>📎 ${esc(a.attachmentName||'anexo')}</span>`:''}${a.aiSummary?'<span>🤖 resumo gerado</span>':''}</div>
         ${a.tags&&a.tags.length? `<div class="tag-row">${a.tags.map(t=>`<span class="pill pill-muted">${esc(t)}</span>`).join('')}</div>`:''}
       </div>
+      ${hasPdf && !a.aiSummary? `<button class="btn btn-sm" data-quick-ai="${a.id}" title="Gerar resumo com IA sem abrir o artigo">🤖</button>` : ''}
     </div>`;
   }).join('');
   hydrateImages($('#articleList'));
@@ -1592,6 +1607,22 @@ function renderArticles(){
     renderArticles(); renderHome();
   }));
   $all('[data-open]', $('#articleList')).forEach(el=>el.addEventListener('click', ()=> openArticleModal(cache.articles.find(x=>x.id===el.dataset.open))));
+  $all('[data-quick-ai]', $('#articleList')).forEach(btn=>btn.addEventListener('click', async e=>{
+    e.stopPropagation();
+    const id=btn.dataset.quickAi; const a=cache.articles.find(x=>x.id===id);
+    if(!a) return;
+    btn.disabled=true; btn.textContent='⏳';
+    try{
+      const summary=await generateArticleAiSummary(a, 'articles');
+      a.aiSummary=summary;
+      await idbPut('articles', a);
+      toast('Resumo gerado ✓');
+      renderArticles();
+    }catch(err){
+      toast('Não foi possível gerar o resumo: '+(err&&err.message?err.message:'erro desconhecido'));
+      btn.disabled=false; btn.textContent='🤖';
+    }
+  }));
 }
 $('#btnAddArticle').addEventListener('click', ()=>openArticleModal(null));
 
@@ -1642,6 +1673,10 @@ function openArticleModal(article){
       $('#mAFetchStatus').textContent='PDF importado ✓ — leitura com progresso automático disponível';
       $('#mABtnAiSummary').disabled=false; $('#mABtnAiSummary').removeAttribute('title');
       $('#mAAiStatus').textContent='';
+      // Gera o resumo sozinho assim que o PDF é importado, se a IA já
+      // estiver configurada e ainda não houver um resumo (pra não sobrescrever
+      // uma edição sua ao reimportar/trocar o PDF).
+      if(getAiConfig().apiKey && !$('#mAAiSummary').value.trim()) runAiSummary();
     }catch(err){ $('#mAFetchStatus').textContent='Não foi possível processar esse PDF.'; }
   }
   $('#mABtnDrive').addEventListener('click', ()=>{
@@ -1662,7 +1697,7 @@ function openArticleModal(article){
     closeModal();
     openPdfReader('articles', article);
   });
-  $('#mABtnAiSummary').addEventListener('click', async ()=>{
+  async function runAiSummary(){
     if(!pdfAssetId && !driveFileId){ toast('Importe um PDF primeiro'); return; }
     $('#mABtnAiSummary').disabled=true;
     $('#mAAiStatus').textContent='Lendo o PDF e gerando o resumo… (pode levar alguns segundos)';
@@ -1676,7 +1711,8 @@ function openArticleModal(article){
     }finally{
       $('#mABtnAiSummary').disabled=false;
     }
-  });
+  }
+  $('#mABtnAiSummary').addEventListener('click', runAiSummary);
   $('#mACancel').addEventListener('click', closeModal);
   $('#mADelete')?.addEventListener('click', async ()=>{
     await idbDelete('articles', article.id);
