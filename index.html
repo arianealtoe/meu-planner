@@ -990,28 +990,24 @@ $('#btnHlList').addEventListener('click', openHighlightsList);
   layer.addEventListener('touchend', handler);
 })();
 
-/* ================= IA (resumo de artigos via API da Anthropic) ================= */
+/* ================= IA (resumo de artigos via API do Google Gemini) ================= */
 // Chamado diretamente do navegador com a própria chave da usuária (sem
-// backend). Isso expõe a chave a quem inspecionar a página — por isso
-// pedimos pra ela usar uma chave com limite de gastos baixo.
+// backend, sem custo — a API do Gemini tem uma cota gratuita generosa pra
+// uso pessoal). Isso expõe a chave a quem inspecionar a página, mas como
+// o app é de uso pessoal isso é um risco aceito conscientemente.
 function getAiConfig(){
   const c=cache.config||{};
-  return { apiKey:c.anthropicApiKey||'', model:c.anthropicModel||'claude-sonnet-4-5-20250929' };
+  return { apiKey:c.geminiApiKey||'', model:c.geminiModel||'gemini-2.5-flash' };
 }
 $('#btnAiConfig').addEventListener('click', ()=>{
   const cfg=getAiConfig();
   openModal(`
-    <h2>Configurar IA (Claude)</h2>
+    <h2>Configurar IA (Google Gemini)</h2>
     <p style="font-size:12.5px;color:var(--ink-muted);line-height:1.6;margin-bottom:10px;">
-      Pra gerar resumos de artigos, o app chama a API da Anthropic direto do seu navegador, usando
-      sua própria chave (crie uma em <b>console.anthropic.com</b> → API Keys).
-      <br><br>
-      <b>Atenção:</b> como este site fica hospedado publicamente (mesmo que só você tenha o link),
-      qualquer pessoa que abrir o "Inspecionar" do navegador enquanto o app estiver aberto consegue ver
-      essa chave. Recomendo criar uma chave específica pra isso com um limite de gastos baixo configurado
-      no painel da Anthropic.
+      Pra gerar resumos de artigos, o app chama a API do Google Gemini direto do seu navegador, usando
+      sua própria chave gratuita (crie/pegue uma em <b>aistudio.google.com</b> → Get API key).
     </p>
-    <div class="field"><label>Chave da API (começa com sk-ant-...)</label><input id="mAiKey" value="${esc(cfg.apiKey)}" placeholder="sk-ant-..."></div>
+    <div class="field"><label>Chave da API Gemini</label><input id="mAiKey" value="${esc(cfg.apiKey)}" placeholder="AIzaSy..."></div>
     <div class="field" style="margin-top:10px;"><label>Modelo (avançado — deixe como está se não souber)</label><input id="mAiModel" value="${esc(cfg.model)}"></div>
     <div class="modal-foot">
       <button class="btn" id="mAiCancel">Cancelar</button>
@@ -1021,29 +1017,32 @@ $('#btnAiConfig').addEventListener('click', ()=>{
   $('#mAiCancel').addEventListener('click', closeModal);
   $('#mAiSave').addEventListener('click', async ()=>{
     cache.config={...cache.config, id:'main',
-      anthropicApiKey:$('#mAiKey').value.trim(),
-      anthropicModel:$('#mAiModel').value.trim()||'claude-sonnet-4-5-20250929'};
+      geminiApiKey:$('#mAiKey').value.trim(),
+      geminiModel:$('#mAiModel').value.trim()||'gemini-2.5-flash'};
     await idbPut('config', cache.config);
     closeModal(); toast('Configuração de IA salva');
   });
 });
-async function callClaude(userPrompt, maxTokens){
+async function callAi(userPrompt, maxTokens){
   const cfg=getAiConfig();
   if(!cfg.apiKey) throw new Error('Configure sua chave da API em "🤖 Configurar IA", no menu lateral.');
-  const res=await fetch('https://api.anthropic.com/v1/messages', {
+  const url=`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(cfg.model)}:generateContent?key=${encodeURIComponent(cfg.apiKey)}`;
+  const res=await fetch(url, {
     method:'POST',
-    headers:{
-      'content-type':'application/json',
-      'x-api-key':cfg.apiKey,
-      'anthropic-version':'2023-06-01',
-      'anthropic-dangerous-direct-browser-access':'true',
-    },
-    body: JSON.stringify({ model:cfg.model, max_tokens:maxTokens||1200, messages:[{role:'user', content:userPrompt}] }),
+    headers:{ 'content-type':'application/json' },
+    body: JSON.stringify({
+      contents:[{ parts:[{ text:userPrompt }] }],
+      generationConfig:{ maxOutputTokens:maxTokens||1500 },
+    }),
   });
   const json=await res.json().catch(()=>null);
-  if(!res.ok){ throw new Error((json && json.error && json.error.message) || `Erro ${res.status} na API da Anthropic`); }
-  const text=((json&&json.content)||[]).map(b=>b.text||'').join('\n').trim();
-  if(!text) throw new Error('A IA não retornou texto.');
+  if(!res.ok){ throw new Error((json && json.error && json.error.message) || `Erro ${res.status} na API do Gemini`); }
+  const cand=json && json.candidates && json.candidates[0];
+  const text=(cand && cand.content && cand.content.parts || []).map(p=>p.text||'').join('\n').trim();
+  if(!text){
+    const blockReason=json && json.promptFeedback && json.promptFeedback.blockReason;
+    throw new Error(blockReason? `A IA bloqueou a resposta (${blockReason}).` : 'A IA não retornou texto.');
+  }
   return text;
 }
 async function extractPdfFullText(pdfDoc, maxChars){
@@ -1078,7 +1077,7 @@ TEXTO EXTRAÍDO DO PDF:
 """
 ${text}
 """`;
-  return await callClaude(prompt, 1400);
+  return await callAi(prompt, 1400);
 }
 
 /* ================= PDF reader ================= */
