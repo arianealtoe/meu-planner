@@ -687,37 +687,47 @@ function updateGoogleBadge(){
 function wasGoogleConnectedBefore(){ try{ return localStorage.getItem('gConnectedBefore')==='1'; }catch(e){ return false; } }
 function markGoogleConnectedBefore(){ try{ localStorage.setItem('gConnectedBefore','1'); }catch(e){} }
 function connectGoogle(opts){
-  const silent = !!(opts && opts.silent);
+  // mode 'silent'  -> nunca abre popup (uso em segundo plano, sem gesto do usuário)
+  // mode 'consent' -> força a tela de permissão, popup aberto NA HORA (uso direto de clique)
+  // mode 'auto'    -> silencioso se já conectou antes, senão pede consentimento
+  const mode=(opts && opts.mode) || 'auto';
   return new Promise((resolve,reject)=>{
-    if(!ensureGoogleInit()){ if(!silent) toast('O Google ainda está carregando — tente de novo em instantes'); reject(); return; }
+    if(!ensureGoogleInit()){ if(mode!=='silent') toast('O Google ainda está carregando — tente de novo em instantes'); reject(); return; }
     gTokenClient.callback=(resp)=>{
-      if(resp.error){ if(!silent) toast('Não foi possível conectar ao Google'); reject(resp); return; }
+      if(resp.error){
+        if(mode!=='silent') toast('O navegador bloqueou a janela do Google. Permita pop-ups para este site e clique em "Conectar ao Google" de novo.');
+        reject(resp); return;
+      }
       gAccessToken=resp.access_token;
       gTokenExpiry=Date.now() + ((resp.expires_in||3600)*1000) - 60000;
       markGoogleConnectedBefore();
       updateGoogleBadge();
       resolve(gAccessToken);
     };
-    // Se já conectou antes neste navegador, tenta renovar silenciosamente
-    // (sem popup de consentimento) — só pede tela de login se isso falhar.
-    const prompt = gAccessToken ? '' : ((silent || wasGoogleConnectedBefore()) ? '' : 'consent');
+    let prompt;
+    if(mode==='silent') prompt='';
+    else if(mode==='consent') prompt='consent';
+    else prompt = gAccessToken ? '' : (wasGoogleConnectedBefore() ? '' : 'consent');
     try{ gTokenClient.requestAccessToken({prompt}); }
-    catch(e){ if(!silent) toast('Não foi possível conectar ao Google'); reject(e); }
+    catch(e){ if(mode!=='silent') toast('Não foi possível conectar ao Google'); reject(e); }
   });
 }
-async function ensureToken(){ if(isGoogleConnected()) return gAccessToken; return connectGoogle(); }
+async function ensureToken(){ if(isGoogleConnected()) return gAccessToken; return connectGoogle({mode:'consent'}); }
 $('#btnGoogleConnect').addEventListener('click', async ()=>{
-  try{ await connectGoogle(); toast('Conectado ao Google'); refreshWeekPreview(); if(currentView()==='agenda') renderCalFrame(); }
-  catch(e){
-    // silêncio falhou por trás das cenas (ex: sessão do Google expirou) — tenta de novo pedindo consentimento explícito
-    try{ await connectGoogle({silent:false}); toast('Conectado ao Google'); refreshWeekPreview(); if(currentView()==='agenda') renderCalFrame(); }catch(e2){}
-  }
+  // Uma ÚNICA chamada direta com prompt de consentimento — encadear uma
+  // tentativa silenciosa antes quebra o "gesto do usuário" e faz o
+  // navegador bloquear o popup da tentativa seguinte.
+  try{
+    await connectGoogle({mode:'consent'});
+    toast('Conectado ao Google'); refreshWeekPreview(); if(currentView()==='agenda') renderCalFrame();
+  }catch(e){ /* connectGoogle já avisou o motivo */ }
 });
 $('#btnWeekConnect')?.addEventListener('click', async ()=>{
-  try{ await connectGoogle(); toast('Conectado ao Google'); refreshWeekPreview(); }catch(e){}
+  try{ await connectGoogle({mode:'consent'}); toast('Conectado ao Google'); refreshWeekPreview(); }catch(e){}
 });
 // Ao abrir o app: se já conectamos ao Google antes neste navegador, tenta
 // renovar o acesso automaticamente em segundo plano, sem exigir novo clique.
+// Isso é sempre silencioso (nunca abre popup) porque não parte de um clique.
 (function tryAutoReconnectGoogle(){
   if(!wasGoogleConnectedBefore()) return;
   let tries=0;
@@ -725,7 +735,7 @@ $('#btnWeekConnect')?.addEventListener('click', async ()=>{
     tries++;
     if(ensureGoogleInit()){
       clearInterval(poll);
-      connectGoogle({silent:true}).then(()=>{
+      connectGoogle({mode:'silent'}).then(()=>{
         refreshWeekPreview();
         if(currentView()==='agenda') renderCalFrame();
       }).catch(()=>{ /* falhou silenciosamente — usuário conecta manualmente quando quiser */ });
