@@ -997,7 +997,7 @@ $('#btnHlList').addEventListener('click', openHighlightsList);
 // o app é de uso pessoal isso é um risco aceito conscientemente.
 function getAiConfig(){
   const c=cache.config||{};
-  return { apiKey:c.geminiApiKey||'', model:c.geminiModel||'gemini-2.5-flash' };
+  return { apiKey:c.geminiApiKey||'', model:c.geminiModel||'gemini-3.6-flash' };
 }
 $('#btnAiConfig').addEventListener('click', ()=>{
   const cfg=getAiConfig();
@@ -1018,7 +1018,7 @@ $('#btnAiConfig').addEventListener('click', ()=>{
   $('#mAiSave').addEventListener('click', async ()=>{
     cache.config={...cache.config, id:'main',
       geminiApiKey:$('#mAiKey').value.trim(),
-      geminiModel:$('#mAiModel').value.trim()||'gemini-2.5-flash'};
+      geminiModel:$('#mAiModel').value.trim()||'gemini-3.6-flash'};
     await idbPut('config', cache.config);
     closeModal(); toast('Configuração de IA salva');
   });
