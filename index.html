@@ -195,8 +195,13 @@
   .book-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:7px;}
   .prog-pct{font-size:10.5px;color:var(--ink-faint);}
 
-  .art-row{display:flex;align-items:flex-start;gap:11px;padding:13px 2px;border-bottom:1px solid var(--border-soft);}
-  .art-row:last-child{border-bottom:none;}
+  .art-block{border-bottom:1px solid var(--border-soft);}
+  .art-block:last-child{border-bottom:none;}
+  .art-row{display:flex;align-items:flex-start;gap:11px;padding:13px 2px;}
+  .art-summary-toggle{display:flex;align-items:center;gap:6px;background:none;border:none;cursor:pointer;font-size:11.5px;color:var(--petrol);font-weight:600;padding:0 2px 12px 2px;}
+  .art-summary-toggle .chev{display:inline-block;transition:transform .15s ease;font-size:10px;}
+  .art-summary-toggle.open .chev{transform:rotate(90deg);}
+  .art-summary-body{white-space:pre-wrap;font-size:12.5px;line-height:1.6;color:var(--ink-muted);background:var(--bg-elev);border:1px solid var(--border-soft);border-radius:10px;padding:12px 14px;margin:0 2px 14px 2px;max-height:420px;overflow:auto;}
   .art-check{width:19px;height:19px;border-radius:50%;border:1.5px solid var(--border);flex:none;margin-top:2px;cursor:pointer;display:flex;align-items:center;justify-content:center;background:var(--surface);}
   .art-check.done{background:var(--good);border-color:var(--good);color:#fff;}
   .art-thumb{width:34px;height:34px;border-radius:8px;flex:none;overflow:hidden;background:var(--petrol-tint);display:flex;align-items:center;justify-content:center;font-size:14px;margin-top:1px;}
@@ -1085,7 +1090,10 @@ async function extractPdfFullText(pdfDoc, maxChars){
 async function generateArticleAiSummary(entry, storeName){
   const bytes=await getEntryPdfBytes(entry, storeName);
   const pdfDoc=await pdfjsLib.getDocument({data:bytes}).promise;
-  const text=await extractPdfFullText(pdfDoc, 24000);
+  // O gemini-flash tem uma janela de contexto grande (bem maior que um
+  // artigo científico típico), então usamos um limite bem folgado pra não
+  // cortar o texto no meio — cortar fazia a IA resumir só metade do artigo.
+  const text=await extractPdfFullText(pdfDoc, 180000);
   if(!text || text.replace(/---.*?---/g,'').trim().length<40){
     throw new Error('Não consegui extrair texto deste PDF (provavelmente é um scan sem OCR).');
   }
@@ -1598,17 +1606,24 @@ function renderArticles(){
     const thumb = a.coverAssetId ? `<img data-asset="${a.coverAssetId}">` : '📄';
     const hasPdf=!!(a.pdfAssetId || a.driveFileId);
     return `
-    <div class="art-row" data-id="${a.id}">
-      <button class="art-check ${a.status==='lido'?'done':''}" data-toggle="${a.id}">
-        ${a.status==='lido'? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l6 6L20 6"/></svg>':''}
-      </button>
-      <div class="art-thumb">${thumb}</div>
-      <div class="art-main" data-open="${a.id}">
-        <div class="art-title ${a.status==='lido'?'done':''}">${esc(a.title||'Sem título')}</div>
-        <div class="art-meta">${a.source?`<span>${esc(a.source)}</span>`:''}${a.pages?`<span>${a.currentPage||0}/${a.pages} pág.</span>`:''}${a.attachmentId&&!a.pdfAssetId?`<span>📎 ${esc(a.attachmentName||'anexo')}</span>`:''}${a.aiSummary?'<span>🤖 resumo gerado</span>':''}</div>
-        ${a.tags&&a.tags.length? `<div class="tag-row">${a.tags.map(t=>`<span class="pill pill-muted">${esc(t)}</span>`).join('')}</div>`:''}
+    <div class="art-block">
+      <div class="art-row" data-id="${a.id}">
+        <button class="art-check ${a.status==='lido'?'done':''}" data-toggle="${a.id}">
+          ${a.status==='lido'? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M4 12l6 6L20 6"/></svg>':''}
+        </button>
+        <div class="art-thumb">${thumb}</div>
+        <div class="art-main" data-open="${a.id}">
+          <div class="art-title ${a.status==='lido'?'done':''}">${esc(a.title||'Sem título')}</div>
+          <div class="art-meta">${a.source?`<span>${esc(a.source)}</span>`:''}${a.pages?`<span>${a.currentPage||0}/${a.pages} pág.</span>`:''}${a.attachmentId&&!a.pdfAssetId?`<span>📎 ${esc(a.attachmentName||'anexo')}</span>`:''}</div>
+          ${a.tags&&a.tags.length? `<div class="tag-row">${a.tags.map(t=>`<span class="pill pill-muted">${esc(t)}</span>`).join('')}</div>`:''}
+        </div>
+        ${hasPdf && !a.aiSummary? `<button class="btn btn-sm" data-quick-ai="${a.id}" title="Gerar resumo com IA sem abrir o artigo">🤖</button>` : ''}
       </div>
-      ${hasPdf && !a.aiSummary? `<button class="btn btn-sm" data-quick-ai="${a.id}" title="Gerar resumo com IA sem abrir o artigo">🤖</button>` : ''}
+      ${a.aiSummary? `
+      <button class="art-summary-toggle" data-summary-toggle="${a.id}">
+        <span class="chev">▸</span> 🤖 Ver resumo gerado por IA
+      </button>
+      <div class="art-summary-body" id="artSummary-${a.id}" hidden>${esc(a.aiSummary)}</div>` : ''}
     </div>`;
   }).join('');
   hydrateImages($('#articleList'));
@@ -1620,6 +1635,13 @@ function renderArticles(){
     renderArticles(); renderHome();
   }));
   $all('[data-open]', $('#articleList')).forEach(el=>el.addEventListener('click', ()=> openArticleModal(cache.articles.find(x=>x.id===el.dataset.open))));
+  $all('[data-summary-toggle]', $('#articleList')).forEach(btn=>btn.addEventListener('click', ()=>{
+    const id=btn.dataset.summaryToggle;
+    const body=$('#artSummary-'+id);
+    const open=!body.hidden;
+    body.hidden=open;
+    btn.classList.toggle('open', !open);
+  }));
   $all('[data-quick-ai]', $('#articleList')).forEach(btn=>btn.addEventListener('click', async e=>{
     e.stopPropagation();
     const id=btn.dataset.quickAi; const a=cache.articles.find(x=>x.id===id);
