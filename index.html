@@ -1087,6 +1087,36 @@ async function extractPdfFullText(pdfDoc, maxChars){
   }
   return out.trim();
 }
+async function extractArticleTitleAuthorsAI(pdfDoc){
+  // O título/autor real do artigo quase nunca está nos metadados do PDF
+  // (que costumam trazer o nome do software, vazio, ou o nome da revista)
+  // — então pedimos pra IA ler a primeira página (o cabeçalho do artigo,
+  // onde título e autores normalmente aparecem) e extrair os dois.
+  const page1=await pdfDoc.getPage(1);
+  const tc1=await page1.getTextContent();
+  let text=tc1.items.map(it=>it.str).join(' ').slice(0, 4000);
+  if(pdfDoc.numPages>1){
+    const page2=await pdfDoc.getPage(2);
+    const tc2=await page2.getTextContent();
+    text += '\n\n' + tc2.items.map(it=>it.str).join(' ').slice(0, 1500);
+  }
+  const prompt=`Abaixo está o texto extraído das primeiras páginas de um PDF de artigo científico. Identifique o TÍTULO do artigo e os AUTORES (nomes das pessoas que escreveram o artigo, não a revista nem instituições).
+
+Responda ESTRITAMENTE em JSON válido, sem markdown, sem explicação, no formato:
+{"title": "...", "authors": "Nome1, Nome2, Nome3"}
+
+Se não conseguir identificar com confiança, use string vazia "" no campo correspondente.
+
+TEXTO:
+"""
+${text}
+"""`;
+  const raw=await callAi(prompt, 400);
+  const jsonMatch=raw.match(/\{[\s\S]*\}/);
+  if(!jsonMatch) throw new Error('Não consegui interpretar a resposta da IA.');
+  const parsed=JSON.parse(jsonMatch[0]);
+  return { title:(parsed.title||'').trim(), authors:(parsed.authors||'').trim() };
+}
 async function generateArticleAiSummary(entry, storeName){
   const bytes=await getEntryPdfBytes(entry, storeName);
   const pdfDoc=await pdfjsLib.getDocument({data:bytes}).promise;
@@ -1614,7 +1644,7 @@ function renderArticles(){
         <div class="art-thumb">${thumb}</div>
         <div class="art-main" data-open="${a.id}">
           <div class="art-title ${a.status==='lido'?'done':''}">${esc(a.title||'Sem título')}</div>
-          <div class="art-meta">${a.source?`<span>${esc(a.source)}</span>`:''}${a.pages?`<span>${a.currentPage||0}/${a.pages} pág.</span>`:''}${a.attachmentId&&!a.pdfAssetId?`<span>📎 ${esc(a.attachmentName||'anexo')}</span>`:''}</div>
+          <div class="art-meta">${a.authors?`<span>${esc(a.authors)}</span>`:''}${a.source?`<span>${esc(a.source)}</span>`:''}${a.pages?`<span>${a.currentPage||0}/${a.pages} pág.</span>`:''}${a.attachmentId&&!a.pdfAssetId?`<span>📎 ${esc(a.attachmentName||'anexo')}</span>`:''}</div>
           ${a.tags&&a.tags.length? `<div class="tag-row">${a.tags.map(t=>`<span class="pill pill-muted">${esc(t)}</span>`).join('')}</div>`:''}
         </div>
         ${hasPdf && !a.aiSummary? `<button class="btn btn-sm" data-quick-ai="${a.id}" title="Gerar resumo com IA sem abrir o artigo">🤖</button>` : ''}
@@ -1662,11 +1692,12 @@ function renderArticles(){
 $('#btnAddArticle').addEventListener('click', ()=>openArticleModal(null));
 
 function openArticleModal(article){
-  const a=article||{title:'',source:'',status:'pendente',tags:[],notes:'',attachmentId:'',attachmentName:'',pdfAssetId:'',driveFileId:'',coverAssetId:'',pages:'',currentPage:'',aiSummary:''};
+  const a=article||{title:'',authors:'',source:'',status:'pendente',tags:[],notes:'',attachmentId:'',attachmentName:'',pdfAssetId:'',driveFileId:'',coverAssetId:'',pages:'',currentPage:'',aiSummary:''};
   const hasPdf = !!(a.pdfAssetId || a.driveFileId);
   openModal(`
     <h2>${article?'Editar artigo':'Novo artigo'}</h2>
     <div class="field"><label>Título</label><input id="mATitle" value="${esc(a.title)}" placeholder="Ex: Stahl — farmacologia dos antipsicóticos"></div>
+    <div class="field" style="margin-top:12px;"><label>Autor(es)</label><input id="mAAuthors" value="${esc(a.authors||'')}" placeholder="Preenchido automaticamente ao importar o PDF"></div>
     <div class="field" style="margin-top:12px;"><label>Fonte / revista</label><input id="mASource" value="${esc(a.source)}" placeholder="Ex: American Journal of Psychiatry"></div>
     <div class="field" style="margin-top:12px;"><label>Tags (separadas por vírgula)</label><input id="mATags" value="${esc((a.tags||[]).join(', '))}" placeholder="psicofarmacologia, revisão"></div>
     <div class="field" style="margin-top:12px;">
@@ -1704,10 +1735,30 @@ function openArticleModal(article){
       pdfAssetId=result.pdfAssetId; coverAssetId=result.coverAssetId;
       driveFileId=result.driveFileId; driveFileName=result.driveFileName; driveResourceKey=result.driveResourceKey; pages=result.pages;
       attach={id:'', name:''};
+      // 1) Fallback rápido e gratuito: metadados embutidos no PDF (nem
+      // sempre confiáveis em artigos científicos, mas não custa tentar).
       if(!$('#mATitle').value.trim() && result.title) $('#mATitle').value=result.title;
+      if(!$('#mAAuthors').value.trim() && result.author) $('#mAAuthors').value=result.author;
       $('#mAFetchStatus').textContent='PDF importado ✓ — leitura com progresso automático disponível';
       $('#mABtnAiSummary').disabled=false; $('#mABtnAiSummary').removeAttribute('title');
       $('#mAAiStatus').textContent='';
+      // 2) Se a IA estiver configurada, refina/preenche título e autores
+      // lendo de verdade o cabeçalho do artigo (muito mais confiável).
+      if(getAiConfig().apiKey){
+        (async()=>{
+          try{
+            $('#mAFetchStatus').textContent='PDF importado ✓ — identificando título e autores com IA…';
+            const bytes=await getEntryPdfBytes({id:(article&&article.id)||'temp', pdfAssetId, driveFileId, driveResourceKey, driveFileName}, 'articles');
+            const pdfDoc=await pdfjsLib.getDocument({data:bytes}).promise;
+            const meta2=await extractArticleTitleAuthorsAI(pdfDoc);
+            if(meta2.title) $('#mATitle').value=meta2.title;
+            if(meta2.authors) $('#mAAuthors').value=meta2.authors;
+            $('#mAFetchStatus').textContent='PDF importado ✓ — título e autores identificados pela IA';
+          }catch(e){
+            $('#mAFetchStatus').textContent='PDF importado ✓ (não consegui identificar título/autor automaticamente — preencha se precisar)';
+          }
+        })();
+      }
       // Gera o resumo sozinho assim que o PDF é importado, se a IA já
       // estiver configurada e ainda não houver um resumo (pra não sobrescrever
       // uma edição sua ao reimportar/trocar o PDF).
@@ -1759,7 +1810,7 @@ function openArticleModal(article){
     if(!title){ toast('Dê um título ao artigo'); return; }
     const data={
       id: article? article.id : uid(),
-      title, source:$('#mASource').value.trim(),
+      title, authors:$('#mAAuthors').value.trim(), source:$('#mASource').value.trim(),
       tags:$('#mATags').value.split(',').map(s=>s.trim()).filter(Boolean),
       notes:$('#mANotes').value.trim(),
       attachmentId:attach.id, attachmentName:attach.name,
