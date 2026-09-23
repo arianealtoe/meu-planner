@@ -1046,7 +1046,20 @@ async function callAi(userPrompt, maxTokens){
     res=await doRequest(false);
     json=await res.json().catch(()=>null);
   }
-  if(!res.ok){ throw new Error((json && json.error && json.error.message) || `Erro ${res.status} na API do Gemini`); }
+  // O modelo "flash" gratuito frequentemente fica sobrecarregado (503) em
+  // horários de pico — isso é temporário, então tentamos de novo sozinhos
+  // algumas vezes antes de desistir e mostrar erro.
+  let retries=0;
+  while(!res.ok && res.status===503 && retries<3){
+    retries++;
+    await new Promise(r=>setTimeout(r, 1500*retries));
+    res=await doRequest(true);
+    json=await res.json().catch(()=>null);
+  }
+  if(!res.ok){
+    const msg=(json && json.error && json.error.message) || `Erro ${res.status} na API do Gemini`;
+    throw new Error(res.status===503 ? `${msg} (tentei ${retries+1}x) — tente de novo em um minuto.` : msg);
+  }
   const cand=json && json.candidates && json.candidates[0];
   let text=(cand && cand.content && cand.content.parts || []).map(p=>p.text||'').join('\n').trim();
   if(!text){
